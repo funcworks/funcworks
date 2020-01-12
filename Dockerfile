@@ -165,7 +165,7 @@ RUN conda create -y -q --name neuro python=3 \
     && sync && conda clean -tipsy && sync \
     && /bin/bash -c "source activate neuro \
       && pip install git+git://github.com/FIU-Neuro/dcmstack \
-      && pip install numpy pandas pybids==0.9.4 nibabel pydicom python-dateutil niworkflows nipype\
+      && pip install numpy pandas pybids==0.9.4 nibabel pydicom python-dateutil niworkflows nipype==1.3.1 \
       && pip install git+git://github.com/nipy/heudiconv@202f9434819318055e5293486f6bdac489989c52 \
       && pip install git+git://github.com/adamkimbler/funcworks" \
     && sync \
