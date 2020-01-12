@@ -9,7 +9,8 @@
 
 FROM ubuntu:xenial-20190515
 ARG DEBIAN_FRONTEND=noninteractive
-
+# Pre-cache neurodebian key
+COPY docker/files/neurodebian.gpg /usr/local/etc/neurodebian.gpg
 #----------------------------------------------------------
 # Install common dependencies and create default entrypoint
 #----------------------------------------------------------
@@ -160,7 +161,7 @@ ENV PATH="/usr/lib/fsl/5.0:/usr/lib/afni/bin:$PATH"
 RUN curl -sSL "http://neuro.debian.net/lists/$( lsb_release -c | cut -f2 ).us-ca.full" >> /etc/apt/sources.list.d/neurodebian.sources.list && \
     apt-key add /usr/local/etc/neurodebian.gpg && \
     (apt-key adv --refresh-keys --keyserver hkp://ha.pool.sks-keyservers.net 0xA5D32F012649A5A9 || true)
-    
+
 # Installing ANTs 2.2.0 (NeuroDocker build)
 ENV ANTSPATH=/usr/lib/ants
 RUN mkdir -p $ANTSPATH && \
