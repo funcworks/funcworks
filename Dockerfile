@@ -39,6 +39,7 @@ RUN apt-get update -qq \
                                                      pigz \
                                                      wget \
                                                      curl \
+                                                     lsb-core \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
