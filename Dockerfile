@@ -187,11 +187,6 @@ RUN apt-get update -qq && apt-get install -yq --no-install-recommends dirmngr gn
     && (apt-key adv --refresh-keys --keyserver hkp://pool.sks-keyservers.net:80 0xA5D32F012649A5A9 || true) \
     && apt-get update
 
-# Installing Neurodebian packages (FSL, AFNI, git)
-RUN curl -sSL "http://neuro.debian.net/lists/stretch.us-ca.full" >> /etc/apt/sources.list.d/neurodebian.sources.list && \
-    apt-key add /usr/local/etc/neurodebian.gpg && \
-    (apt-key adv --refresh-keys --keyserver hkp://ha.pool.sks-keyservers.net 0xA5D32F012649A5A9 || true)
-
 #--------------------
 # Download mri_deface
 #--------------------
