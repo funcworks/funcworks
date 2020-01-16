@@ -1,13 +1,11 @@
 import os
-import sys
-import json
 from pathlib import Path
-import nibabel as nb
 from nipype.pipeline import engine as pe
-from nipype.interfaces import fsl, afni, base, io
+from nipype.interfaces import fsl, io
 from nipype.interfaces.utility import Function, IdentityInterface
 from nipype.algorithms import modelgen, rapidart as ra
-
+from .. import utils
+# pylint: disable=C0415,R0915,R0914,R0913
 def fsl_first_level_wf(model,
                        step,
                        bids_dir,
@@ -26,8 +24,10 @@ def fsl_first_level_wf(model,
 
     model file contents
     --------------------
-    contrasts = a dictionary containing contrast names as keys, with each value containing information for FSL Featmodel
-                an example being {'contrast1$contrast2' : 'T'} where contrast1 and contrast2 are trial_types from the events.tsv
+    contrasts = a dictionary containing contrast names as keys,
+                with each value containing information for FSL Featmodel
+                an example being {'contrast1_gt_contrast2' : 'T'}
+                where contrast1 and contrast2 are trial_types from the events.tsv
     confounds = a list of confounds to use in regression model
 
     Parameters
@@ -35,15 +35,12 @@ def fsl_first_level_wf(model,
     omp_nthreads
 
     """
-    pop_lambda = lambda x: x[0]
+    # # TODO:  Implement design matrix parser to produce figures and retrieve matrix
+    #design_matrix_pattern = \
+    #('[sub-{subject}/][ses-{session}/]'
+    # '[sub-{subject}_][ses-{session}_]task-{task}[_acq-{acquisition}]'
+    # '[_rec-{reconstruction}][_run-{run}][_echo-{echo}]_{suffix<design>}.tsv')
 
-    design_matrix_pattern = '[sub-{subject}/][ses-{session}/]' \
-        '[sub-{subject}_][ses-{session}_]task-{task}[_acq-{acquisition}]' \
-        '[_rec-{reconstruction}][_run-{run}][_echo-{echo}]_{suffix<design>}.tsv'
-    contrast_pattern = '[sub-{subject}/][ses-{session}/]' \
-        '[sub-{subject}_][ses-{session}_]task-{task}[_acq-{acquisition}]' \
-        '[_rec-{reconstruction}][_run-{run}][_echo-{echo}][_space-{space}]_' \
-        'contrast-{contrast}_stat-{stat<effect|variance|z|p|t|F>}_statmap.nii.gz'
     bids_dir = Path(bids_dir)
     work_dir = Path(work_dir)
     workflow = pe.Workflow(name=name)
@@ -52,6 +49,7 @@ def fsl_first_level_wf(model,
     workflow.base_dir = work_dir / model['Name']
     confound_names = \
     [x for x in step['Model']['X'] if x not in step['DummyContrasts']['Conditions']]
+    condition_names = step['DummyContrasts']['Conditions']
 
     bdg = pe.Node(io.BIDSDataGrabber(), name='bdg')
     bdg.inputs.base_dir = bids_dir
@@ -71,13 +69,13 @@ def fsl_first_level_wf(model,
 
     exec_get_metadata = pe.MapNode(Function(input_names=['func'],
                                             output_names=['repetition_time', 'num_timepoints'],
-                                            function=get_metadata),
+                                            function=utils.get_metadata),
                                    iterfield=['func'],
                                    name='exec_get_metadata')
 
     exec_get_confounds = pe.MapNode(Function(input_names=['func'],
                                              output_names=['confounds_file'],
-                                             function=get_confounds),
+                                             function=utils.get_confounds),
                                     iterfield=['func'],
                                     name='exec_get_confounds')
 
@@ -86,17 +84,17 @@ def fsl_first_level_wf(model,
                                  iterfield=['in_file', 'in_file2'],
                                  name='apply_brainmask')
 
-    exec_get_info = pe.MapNode(Function(input_names=['func', 'events',
+    exec_get_info = pe.MapNode(Function(input_names=['events',
                                                      'confounds',
                                                      'confound_regressors'],
                                         output_names=['output', 'names'],
-                                        function=get_info),
-                               iterfield=['func', 'events', 'confounds'],
+                                        function=utils.get_info),
+                               iterfield=['events', 'confounds'],
                                name='exec_get_info')
 
     exec_get_contrasts = pe.MapNode(Function(input_names=['step', 'include_contrasts'],
                                              output_names=['contrasts'],
-                                             function=get_contrasts),
+                                             function=utils.get_contrasts),
                                     iterfield=['include_contrasts'],
                                     name='exec_get_contrasts')
     exec_get_contrasts.inputs.step = step
@@ -115,7 +113,7 @@ def fsl_first_level_wf(model,
                            iterfield=['functional_data', 'session_info',
                                       'interscan_interval', 'contrasts'],
                            name='fit_model')
-    fit_model.inputs.bases = {'gamma':{'derivs': False}}
+    fit_model.inputs.bases = {'dgamma':{'derivs': False}}
     fit_model.inputs.film_threshold = 0.0
     fit_model.inputs.model_serial_correlations = True
 
@@ -138,18 +136,17 @@ def fsl_first_level_wf(model,
     estimate_model.inputs.results_dir = 'results'
     estimate_model.inputs.smooth_autocorr = True
 
-    outputnode = pe.MapNode(Function(input_names=['bids_dir', 'output_dir', 'contrast_pattern',
+    outputnode = pe.MapNode(Function(input_names=['bids_dir', 'output_dir',
                                                   'contrasts', 'entities',
-                                                  'effects', 'variances', 'z', 't', 'dof'],
-                                     output_names=['effects', 'variances', 'z',
-                                                   'p', 't', 'dof', 'F'],
-                                     function=rename_outputs),
+                                                  'effects', 'variances', 'zstats', 'tstats', 'dof'],
+                                     output_names=['effects', 'variances', 'zstats',
+                                                   'pstats', 'tstats', 'dof', 'fstats'],
+                                     function=utils.rename_outputs),
                             iterfield=['entities', 'effects', 'variances',
-                                       'z', 't', 'dof', 'contrasts'],
+                                       'zstats', 'tstats', 'dof', 'contrasts'],
                             name='outputnode')
     outputnode.inputs.bids_dir = bids_dir
     outputnode.inputs.output_dir = output_dir
-    outputnode.inputs.contrast_pattern = contrast_pattern
 
     #Setup connections among workflow nodes
     workflow.connect(bdg, 'func', apply_brainmask, 'in_file')
@@ -162,7 +159,7 @@ def fsl_first_level_wf(model,
     if use_rapidart:
         exec_get_motion_parameters = pe.MapNode(Function(input_names=['confounds'],
                                                          output_names='motion_params',
-                                                         function=get_motion_parameters),
+                                                         function=utils.get_motion_parameters),
                                                 iterfield=['confounds'],
                                                 name='exec_get_motion_parameters')
 
@@ -182,7 +179,7 @@ def fsl_first_level_wf(model,
                                                             'confound_regressors',
                                                             'num_timepoints'],
                                                output_names=['confounds', 'confound_regressors'],
-                                               function=reshape_ra),
+                                               function=utils.reshape_ra),
                                       iterfield=['outlier_files', 'confounds', 'num_timepoints'],
                                       name='reshape_rapidart')
         reshape_rapidart.inputs.confound_regressors = confound_names
@@ -199,7 +196,7 @@ def fsl_first_level_wf(model,
         workflow.connect(exec_get_confounds, 'confounds_file', reshape_rapidart, 'confounds')
         workflow.connect(exec_get_metadata, 'num_timepoints', reshape_rapidart, 'num_timepoints')
 
-        exec_get_info.iterfield = ['func', 'events', 'confounds', 'confound_regressors']
+        exec_get_info.iterfield = ['events', 'confounds', 'confound_regressors']
 
         workflow.connect(reshape_rapidart, 'confounds', exec_get_info, 'confounds')
         workflow.connect(reshape_rapidart, 'confound_regressors',
@@ -209,14 +206,18 @@ def fsl_first_level_wf(model,
         workflow.connect(exec_get_confounds, 'confounds_file', exec_get_info, 'confounds')
         exec_get_info.inputs.confound_regressors = confound_names
 
-
-    workflow.connect(bdg, 'func', exec_get_info, 'func')
+    exec_get_info.inputs.condition_names = condition_names
     workflow.connect(bdg, 'events', exec_get_info, 'events')
 
     if smoothing_level == 'l1':
-        setup_susan = pe.MapNode(Function(input_names=['func', 'brain_mask'],
+        get_tmean_img = pe.MapNode(fsl.ImageMaths(op_string='-Tmean',
+                                                  suffix='_mean'),
+                                   iterfield=['in_file'],
+                                   name='smooth_meanfunc')
+
+        setup_susan = pe.MapNode(Function(input_names=['func', 'brain_mask', 'mean_image'],
                                           output_names=['usans', 'brightness_threshold'],
-                                          function=get_smoothing_info_fsl),
+                                          function=utils.get_smoothing_info_fsl),
                                  iterfield=['func', 'brain_mask'],
                                  name='setup_susan')
 
@@ -230,8 +231,11 @@ def fsl_first_level_wf(model,
                                        iterfield=['in_file', 'in_file2'],
                                        name='apply_mask_smooth')
 
+        workflow.connect(apply_brainmask, 'out_file', get_tmean_img, 'in_file')
+
         workflow.connect(apply_brainmask, 'out_file', setup_susan, 'func')
         workflow.connect(bdg, 'brain_mask', setup_susan, 'brain_mask')
+        workflow.connect(get_tmean_img, 'out_file', setup_susan, 'mean_img')
 
         workflow.connect(apply_brainmask, 'out_file', run_susan, 'in_file')
         workflow.connect(setup_susan, 'brightness_threshold', run_susan, 'brightness_threshold')
@@ -273,102 +277,78 @@ def fsl_first_level_wf(model,
 
     '''
     if 'F' in [x[1] for x in exec_get_contrasts.outputs['contrasts']]:
-        outputnode = pe.MapNode(Function(input_names=['bids_dir', 'output_dir', 'contrast_pattern', 'contrasts', 'entities',
-                                                  'effects', 'variances', 'z', 't', 'F', 'dof'],
-                                         output_names=['effects', 'variances', 'z', 'p', 't', 'dof', 'F'],
-                                         function=rename_outputs),
-                                iterfield=['entities', 'effects', 'variances', 'z', 't', 'F', 'dof'],
+        outputnode = pe.MapNode(Function(input_names=['bids_dir', 'output_dir',
+                                                      'contrasts', 'entities',
+                                                      'effects', 'variances', 'zstats', 'tstats', 'stats', 'dof'],
+                                         output_names=['effects', 'variances', 'zstats',
+                                                       'pstats', 'tstats', 'dof', 'fstats'],
+                                         function=utils.rename_outputs),
+                                iterfield=['entities', 'effects', 'variances',
+                                           'zstats', 'tstats', 'stats', 'dof'],
                                 name='outputnode')
         outputnode.inputs.bids_dir = bids_dir
         outputnode.inputs.output_dir = output_dir
-        outputnode.inputs.contrast_pattern = contrast_pattern
-        workflow.connect(estimate_model, 'fstats', outputnode, 'F')
+        workflow.connect(estimate_model, 'fstats', outputnode, 'fstats')
     '''
 
-    workflow.connect(bdg, ('func', get_entities), outputnode, 'entities')
+    workflow.connect(bdg, ('func', utils.get_entities), outputnode, 'entities')
     workflow.connect(estimate_model, 'copes', outputnode, 'effects')
     workflow.connect(estimate_model, 'varcopes', outputnode, 'variances')
-    workflow.connect(estimate_model, 'zstats', outputnode, 'z')
-    workflow.connect(estimate_model, 'tstats', outputnode, 't')
+    workflow.connect(estimate_model, 'zstats', outputnode, 'zstats')
+    workflow.connect(estimate_model, 'tstats', outputnode, 'tstats')
     workflow.connect(estimate_model, 'dof_file', outputnode, 'dof')
     workflow.connect(exec_get_contrasts, 'contrasts', outputnode, 'contrasts')
 
 
     return workflow
-"""
-def fsl_second_level_wf(model,
-                        step,
-                        bids_dir,
-                        output_dir,
-                        work_dir,
-                        subject_id,
-                        smoothing_fwhm=None,
-                        smoothing_level=None,
-                        smoothing_type=None,
-                        derivatives,
-                        name='fsl_second_level_wf'):
-    '''Defines secondlvl workflow for emu project'''
-    workflow = Workflow(name='scndlvl_wf')
 
 
-    # Create a datasource node to get the task_mri and motion-noise files
-    datasource = pe.Node(DataGrabber(infields=['subject_id'], outfields=info.keys()),
-                         name='datasource')
-    datasource.inputs.template = '*'
-    datasource.inputs.subject_id = subject_id
-    datasource.inputs.sort_filelist = True
-    datasource.inputs.raise_on_empty = True
+def fsl_session_level_wf(output_dir,
+                         subject_id,
+                         work_dir,
+                         derivatives,
+                         name='fsl_session_level_wf'):
 
-    # Create an Inputspec node to deal with copes and varcopes doublelist issues
-    fixedfx_inputspec = pe.Node(IdentityInterface(fields=['copes', 'varcopes', 'dof_files'],
-                                                  mandatory_inputs=True),
-                                name="fixedfx_inputspec")
-    workflow.connect(datasource, ('copes', doublelist), fixedfx_inputspec, "copes")
-    workflow.connect(datasource, ('varcopes', doublelist), fixedfx_inputspec, "varcopes")
-    workflow.connect(datasource, ('dof_files', doublelist), fixedfx_inputspec, "dof_files")
+    workflow = pe.Workflow(name=name)
+    workflow.base_dir = work_dir
 
-    # Create a Merge node to collect all of the COPES
-    copemerge = pe.MapNode(Merge(), iterfield=['in_files'], name='copemerge')
-    copemerge.inputs.dimension = 't'
-    copemerge.inputs.environ = {'FSLOUTPUTTYPE': 'NIFTI_GZ'}
-    copemerge.inputs.output_type = 'NIFTI_GZ'
-    workflow.connect(fixedfx_inputspec, 'copes', copemerge, 'in_files')
+    return_conts = pe.Node(Function(input_names=['subject_id', 'derivatives'],
+                                    output_names=['effects', 'variances', 'dofs'],
+                                    function=utils.return_contrasts), name='return_conts')
+    return_conts.inputs.derivatives = derivatives
+    return_conts.inputs.subject_id = subject_id
 
-    # Create a Function node to generate a DOF volume
-    gendofvolume = pe.Node(Function(input_names=['dof_files', 'cope_files'],
-                                    output_names=['dof_volumes'],
-                                    function=get_dofvolumes),
-                           name='gendofvolume')
-    workflow.connect(fixedfx_inputspec, 'dof_files', gendofvolume, 'dof_files')
-    workflow.connect(copemerge, 'merged_file', gendofvolume, 'cope_files')
+    merge_conts = pe.MapNode(Function(input_names=['effects', 'variances', 'dofs', 'derivatives'],
+                                      output_names=['merged_effects',
+                                                    'merged_variances',
+                                                    'merged_dofs'],
+                                      function=utils.merge_runs),
+                             iterfield=['effects', 'variances', 'dofs'],
+                             name='merge_conts')
+    merge_conts.inputs.derivatives = derivatives
+    workflow.connect(return_conts, 'effects', merge_conts, 'effects')
+    workflow.connect(return_conts, 'variances', merge_conts, 'variances')
+    workflow.connect(return_conts, 'dofs', merge_conts, 'dofs')
 
-    # Create a Merge node to collect all of the VARCOPES
-    varcopemerge = pe.MapNode(Merge(), iterfield=['in_files'], name='varcopemerge')
-    varcopemerge.inputs.dimension = 't'
-    varcopemerge.inputs.environ = {'FSLOUTPUTTYPE': 'NIFTI_GZ'}
-    varcopemerge.inputs.output_type = 'NIFTI_GZ'
-    workflow.connect(fixedfx_inputspec, 'varcopes', varcopemerge, 'in_files')
+    count_runs = pe.MapNode(Function(input_names=['effects'],
+                                     output_names=['num_copes'],
+                                     function=utils.num_copes),
+                            iterfield=['effects'],
+                            name='count_runs')
+    workflow.connect(merge_conts, 'merged_effects', count_runs, 'effects')
 
-    # Create a node to define the contrasts from the names of the copes
-    getcontrasts = pe.Node(Function(input_names=['data_inputs'],
-                                    output_names=['contrasts'],
-                                    function=get_contrasts),
-                           name='getcontrasts')
-    workflow.connect(datasource, ('copes', doublelist), getcontrasts, 'data_inputs')
+    model_session = pe.MapNode(fsl.L2Model(), iterfield=['num_copes'], name='model_session')
+    workflow.connect(count_runs, 'num_copes', model_session, 'num_copes')
 
-    # Create a Function node to rename output files with something more meaningful
-    getsubs = pe.Node(Function(input_names=['cons'],
-                               output_names=['subs'],
-                               function=get_subs),
-                      name='getsubs')
-    workflow.connect(getcontrasts, 'contrasts', getsubs, 'cons')
-
-    # Create a l2model node for the Fixed Effects analysis (aka within subj across runs)
-    l2model = pe.MapNode(L2Model(), iterfield=['num_copes'], name='l2model')
-    workflow.connect(datasource, ('copes', num_copes), l2model, 'num_copes')
+    find_brainmask = pe.Node(Function(input_names=['subject_id', 'derivatives'],
+                                      output_names='brain_mask',
+                                      function=utils.get_brainmask),
+                             name='find_brainmask')
+    find_brainmask.inputs.derivatives = derivatives
+    find_brainmask.inputs.subject_id = subject_id
 
     # Create a FLAMEO Node to run the fixed effects analysis
-    flameo_fe = pe.MapNode(FLAMEO(),
+    flameo_fe = pe.MapNode(fsl.FLAMEO(),
                            iterfield=['cope_file', 'var_cope_file', 'dof_var_cope_file',
                                       'design_file', 't_con_file', 'cov_split_file'],
                            name='flameo_fe')
@@ -376,230 +356,43 @@ def fsl_second_level_wf(model,
     flameo_fe.inputs.log_dir = 'stats'
     flameo_fe.inputs.output_type = 'NIFTI_GZ'
     flameo_fe.inputs.run_mode = 'fe'
-    workflow.connect(varcopemerge, 'merged_file', flameo_fe, 'var_cope_file')
-    workflow.connect(l2model, 'design_mat', flameo_fe, 'design_file')
-    workflow.connect(l2model, 'design_con', flameo_fe, 't_con_file')
-    workflow.connect(l2model, 'design_grp', flameo_fe, 'cov_split_file')
-    workflow.connect(gendofvolume, 'dof_volumes', flameo_fe, 'dof_var_cope_file')
-    workflow.connect(datasource, 'mask_file', flameo_fe, 'mask_file')
-    workflow.connect(copemerge, 'merged_file', flameo_fe, 'cope_file')
+    workflow.connect(model_session, 'design_mat', flameo_fe, 'design_file')
+    workflow.connect(model_session, 'design_con', flameo_fe, 't_con_file')
+    workflow.connect(model_session, 'design_grp', flameo_fe, 'cov_split_file')
+    workflow.connect(merge_conts, 'merged_dofs', flameo_fe, 'dof_var_cope_file')
+    workflow.connect(merge_conts, 'merged_variances', flameo_fe, 'var_cope_file')
+    workflow.connect(merge_conts, 'merged_effects', flameo_fe, 'cope_file')
+    workflow.connect(find_brainmask, 'brain_mask', flameo_fe, 'mask_file')
 
-    # Create an outputspec node
-    scndlvl_outputspec = Node(IdentityInterface(fields=['res4d', 'copes',
-                                                        'varcopes', 'zstats',
-                                                        'tstats'],
-                                                mandatory_inputs=True),
-                              name='scndlvl_outputspec')
-    workflow.connect(flameo_fe, 'res4d', scndlvl_outputspec, 'res4d')
-    workflow.connect(flameo_fe, 'copes', scndlvl_outputspec, 'copes')
-    workflow.connect(flameo_fe, 'var_copes', scndlvl_outputspec, 'varcopes')
-    workflow.connect(flameo_fe, 'zstats', scndlvl_outputspec, 'zstats')
-    workflow.connect(flameo_fe, 'tstats', scndlvl_outputspec, 'tstats')
-"""
+    get_renames = pe.MapNode(Function(input_names=['merged_effects', 'effects',
+                                                   'variances', 'tstats',
+                                                   'zstats', 'res4d'],
+                                      output_names=['new_names'],
+                                      function=utils.rename_contrasts),
+                             iterfield=['merged_effects', 'effects',
+                                        'variances', 'tstats',
+                                        'zstats', 'res4d'],
+                             name='get_renames')
+    workflow.connect(merge_conts, 'merged_effects', get_renames, 'merged_effects')
+    workflow.connect(flameo_fe, 'copes', get_renames, 'effects')
+    workflow.connect(flameo_fe, 'var_copes', get_renames, 'variances')
+    workflow.connect(flameo_fe, 'tstats', get_renames, 'tstats')
+    workflow.connect(flameo_fe, 'zstats', get_renames, 'zstats')
+    workflow.connect(flameo_fe, 'res4d', get_renames, 'res4d')
 
-def get_contrasts(step, include_contrasts):
-    """
-    Produces contrasts from a given model file and a run specific events file
-    """
-    import itertools as it
-    include_combos = list(it.combinations(include_contrasts, 2))
-    all_contrasts = []
-    contrasts = step["Contrasts"]
-    dummy_contrasts = step["DummyContrasts"]['Conditions']
-    for contrast in dummy_contrasts:
-        if contrast not in include_contrasts:
-            continue
-        all_contrasts.append((contrast, 'T',
-                              [contrast.split('.')[-1]],
-                              [1]))
-    for contrast in contrasts:
-        if not any([all([x in contrast['ConditionList'], y in contrast['ConditionList']]) \
-                    for x, y in include_combos])\
-        and len(contrast['ConditionList']) == 2:
-            continue
-        condition_list = [x.split('.')[-1] if '.' in x else x for x in contrast['ConditionList']]
-        all_contrasts.append((contrast['Name'], contrast['Type'].upper(),
-                              condition_list,
-                              contrast['Weights']))
-    return all_contrasts
+    # Create a datasink node
+    sinkd = pe.MapNode(io.DataSink(infields=['copes', 'var_copes', 'tstats',
+                                             'zstats', 'res4d', 'substitutions']),
+                       iterfield=['copes', 'var_copes', 'tstats',
+                                  'zstats', 'res4d', 'substitutions'],
+                       name='sinkd')
+    sinkd.inputs.base_directory = os.path.join(output_dir, 'session_level')
+    sinkd.inputs.container = 'sub-' + subject_id
+    workflow.connect(flameo_fe, 'copes', sinkd, 'copes')
+    workflow.connect(flameo_fe, 'var_copes', sinkd, 'var_copes')
+    workflow.connect(flameo_fe, 'tstats', sinkd, '.tstats')
+    workflow.connect(flameo_fe, 'zstats', sinkd, '.zstats')
+    workflow.connect(flameo_fe, 'res4d', sinkd, '.res4d')
+    workflow.connect(get_renames, 'new_names', sinkd, 'substitutions')
 
-def get_info(func, confounds, events, confound_regressors):
-    '''Grabs EV files for subject based on contrasts of interest'''
-    from nipype.interfaces.base import Bunch
-    import pandas as pd
-    import numpy as np
-    event_data = pd.read_csv(events, sep='\t')
-    conf_data = pd.read_csv(confounds, sep='\t')
-    names = []
-    onsets = []
-    amplitudes = []
-    durations = []
-    regressor_names = []
-    regressors = []
-    for trial_type, trial_frame in event_data.groupby('trial_type'):
-        if len(trial_frame) > 0:
-            names.append(trial_type)
-            onsets.append(trial_frame['onset'].values)
-            durations.append(trial_frame['duration'].values)
-            amplitudes.append(np.ones(len(trial_frame)))
-    for confound in confound_regressors:
-        regressor_names.append(confound)
-        regressors.append(conf_data[confound].values)
-
-    output = Bunch(conditions=names,
-                   onsets=onsets,
-                   durations=durations,
-                   amplitudes=amplitudes,
-                   tmod=None,
-                   pmod=None,
-                   regressor_names=regressor_names,
-                   regressors=regressors)
-    return output, names
-
-def get_confounds(func):
-    #A workaround to a current issue in pybids
-    #that causes massive resource use when indexing derivative tsv files
-    lead = func.split('desc')[0]
-    confound_file = lead + 'desc-confounds_regressors.tsv'
-    return confound_file
-
-def get_metadata(func):
-    import json
-    import nibabel as nb
-    num_timepoints = nb.load(func).get_data().shape[3]
-    lead = func.split('.nii.gz')[0]
-    metafile = lead + '.json'
-    with open(metafile) as mf:
-        metadata = json.load(mf)
-
-    return metadata['RepetitionTime'], num_timepoints
-
-def get_motion_parameters(confounds):
-    import os
-    import pandas as pd
-    motion_params = os.path.join(os.getcwd(),
-                                 os.path.basename(confounds).split('.')[0] + '_motparams.tsv')
-    confound_data = pd.read_csv(confounds, sep='\t')
-    #Motion data gets formatted FSL style, with x, y, z rotation, then x,y,z translation
-    motion_data = confound_data[['rot_x', 'rot_y', 'rot_z', 'trans_x', 'trans_y', 'trans_z']]
-    motion_data.to_csv(motion_params, sep='\t', header=None, index=None)
-    return motion_params
-
-def get_smoothing_info_fsl(func, brain_mask):
-    import os
-    import nibabel as nb
-    import numpy as np
-    img = nb.load(func)
-    img_data = img.get_data()
-    mask_img_data = nb.load(brain_mask).get_data()
-    img_affine = img.affine
-    img_median = np.median(img_data[mask_img_data > 0])
-    img_mean = img_data.mean(axis=3) #average on time axis
-    mean_img = nb.nifti1.Nifti1Image(img_mean, img_affine)
-    mean_path = os.path.join(os.getcwd(), os.path.basename(func).split('.')[0] + '_tmean.nii.gz')
-    mean_img.to_filename(mean_path)
-    btthresh = img_median * 0.75
-    usans = [tuple([mean_path, btthresh])]
-
-    return usans, btthresh
-
-def get_entities(func):
-    import os
-    run_entities = []
-    for ix, func_file in enumerate(func):
-        stem = os.path.basename(func_file).split('.')[0]
-        entity_pairs = stem.split('_')
-        entities = {x.split('-')[0]:x.split('-')[1] if '-' in x else None for x in entity_pairs}
-        for item in entities:
-            if entities[item] is None:
-                entities.pop(item)
-                break
-        entities['suffix'] = item
-        entities['subject'] = entities.pop('sub', None)
-        run_entities.append(entities)
-    return run_entities
-
-def rename_outputs(bids_dir, output_dir, contrast_pattern, contrasts, entities,
-                   effects=[], variances=[], z=[], p=[], t=[], F=[], dof=[]):
-    import os
-    import subprocess
-    import shutil
-    from bids import BIDSLayout
-    def snake_to_camel(string):
-        string.replace('.', '_')
-        words = string.replace('.', '').split('_')
-        return words[0] + ''.join(word.title() for word in words[1:])
-    stat_dict = dict(effects=effects,
-                     variances=variances,
-                     z=z,
-                     t=t,
-                     F=F)
-    dof_pattern = ('[sub-{subject}/][ses-{session}/]sub-{subject}'
-                   '[_ses-{session}]_task-{task}[_acq-{acquisition}][_rec-{reconstruction}]'
-                   '[_run-{run}][_echo-{echo}][_space-{space}]_contrast-{contrast}_dof.tsv')
-    layout = BIDSLayout(bids_dir, validate=False)
-
-    output_path = os.path.join(output_dir, 'run_level')
-    os.makedirs(output_path, exist_ok=True)
-    os.makedirs(os.path.join(output_path, 'sub-' + entities["subject"]), exist_ok=True)
-    if 'session' in entities:
-        os.makedirs(os.path.join(output_path,
-                                 'sub-' + entities["subject"],
-                                 'ses-' + entities["session"]),
-                    exist_ok=True)
-    outputs = {'p':[], 'dof':[]}
-    contrast_names = [x[0] for x in contrasts]
-    for stat, file_list in stat_dict.items():
-        outputs[stat] = []
-        for ix, file in enumerate(file_list):
-            entities['contrast'] = snake_to_camel(contrast_names[ix])
-            entities['stat'] = stat
-            dest_path = os.path.join(output_path,
-                                     layout.build_path(entities, contrast_pattern, validate=False))
-            #os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-            shutil.copy(file, dest_path)
-            outputs[stat].append(dest_path)
-            if stat == 'z':
-                entities['stat'] = 'p'
-                dest_path = os.path.join(output_path,
-                                         layout.build_path(entities, contrast_pattern, validate=False))
-                outputs['p'].append(dest_path)
-                subprocess.Popen(['fslmaths', f'{file}', '-ztop', f'{dest_path}']).wait()
-            #Produce dof file if one doesn't exist for a contrast
-            dest_path = os.path.join(output_path,
-                                     layout.build_path(entities, dof_pattern, validate=False))
-            if not os.path.isfile(dest_path):
-                shutil.copy(dof, dest_path)
-                outputs['dof'].append(dest_path)
-    effects = outputs['effects']
-    variances = outputs['variances']
-    z = outputs['z']
-    p = outputs['p']
-    t = outputs['t']
-    F = outputs['F']
-    dof = outputs['dof']
-    return effects, variances, z, p, t, dof, F
-
-def reshape_ra(outlier_files, confounds, confound_regressors, num_timepoints):
-    import os
-    import pandas as pd
-    import numpy as np
-
-    art_dict = {}
-    outlier_frame = pd.read_csv(outlier_files, header=None)
-    confound_frame = pd.read_csv(confounds, sep='\t')
-    for i, row in outlier_frame.iterrows():
-        art_dict['rapidart' + str(i)] = np.zeros(num_timepoints)
-        art_dict['rapidart' + str(i)][row.values[0]] = 1
-        confound_regressors.append('rapidart' + str(i))
-    rapid_frame = pd.DataFrame(art_dict)
-    confound_frame = pd.concat([confound_frame, rapid_frame], axis=1)
-    confounds = os.path.join(os.getcwd(), os.path.basename(confounds).split('.')[0] + '_ra.tsv')
-    confound_frame.to_csv(confounds, sep='\t')
-
-    return confounds, confound_regressors
-
-def snake_to_camel(string):
-    string.replace('.', '_')
-    words = string.replace('.', '').split('_')
-    return words[0] + ''.join(word.title() for word in words[1:])
+    return workflow
