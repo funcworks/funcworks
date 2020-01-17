@@ -32,6 +32,7 @@ def get_info(confounds, events, confound_regressors, condition_names):
     import numpy as np
     event_data = pd.read_csv(events, sep='\t')
     conf_data = pd.read_csv(confounds, sep='\t')
+    conf_data.fillna(0, inplace=True)
     names = []
     onsets = []
     amplitudes = []
