@@ -19,10 +19,19 @@ def get_contrasts(step, include_contrasts):
                     for x, y in include_combos])\
         and len(contrast['ConditionList']) == 2:
             continue
-        condition_list = [x.split('.')[-1] if '.' in x else x for x in contrast['ConditionList']]
-        all_contrasts.append((contrast['Name'], contrast['Type'].upper(),
-                              condition_list,
-                              contrast['Weights']))
+
+        if contrast['Name'] == 'task_vs_baseline':
+            condition_list = [x.split('.')[-1] if '.' in x else x for x in include_contrasts]
+            weight_vector = [1 * 1 / len(include_contrasts)] * len(include_contrasts)
+            all_contrasts.append((contrast['Name'], contrast['Type'].upper(),
+                                  condition_list,
+                                  weight_vector))
+        else:
+            condition_list = \
+            [x.split('.')[-1] if '.' in x else x for x in contrast['ConditionList']]
+            all_contrasts.append((contrast['Name'], contrast['Type'].upper(),
+                                  condition_list,
+                                  contrast['Weights']))
     return all_contrasts
 
 def get_info(confounds, events, confound_regressors, condition_names):
