@@ -139,7 +139,8 @@ def fsl_first_level_wf(model,
 
     outputnode = pe.MapNode(Function(input_names=['bids_dir', 'output_dir',
                                                   'contrasts', 'entities',
-                                                  'effects', 'variances', 'zstats', 'tstats', 'dof'],
+                                                  'effects', 'variances',
+                                                  'zstats', 'tstats', 'dof'],
                                      output_names=['effects', 'variances', 'zstats',
                                                    'pstats', 'tstats', 'dof', 'fstats'],
                                      function=utils.rename_outputs),
@@ -236,7 +237,7 @@ def fsl_first_level_wf(model,
 
         workflow.connect(apply_brainmask, 'out_file', setup_susan, 'func')
         workflow.connect(bdg, 'brain_mask', setup_susan, 'brain_mask')
-        workflow.connect(get_tmean_img, 'out_file', setup_susan, 'mean_img')
+        workflow.connect(get_tmean_img, 'out_file', setup_susan, 'mean_image')
 
         workflow.connect(apply_brainmask, 'out_file', run_susan, 'in_file')
         workflow.connect(setup_susan, 'brightness_threshold', run_susan, 'brightness_threshold')
