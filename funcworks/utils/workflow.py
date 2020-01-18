@@ -96,7 +96,7 @@ def get_motion_parameters(confounds):
     motion_data.to_csv(motion_params, sep='\t', header=None, index=None)
     return motion_params
 
-def get_smoothing_info_fsl(func, brain_mask, mean_img):
+def get_smoothing_info_fsl(func, brain_mask, mean_image):
     import nibabel as nb
     import numpy as np
     img = nb.load(func)
@@ -104,7 +104,7 @@ def get_smoothing_info_fsl(func, brain_mask, mean_img):
     mask_img_data = nb.load(brain_mask).get_data()
     img_median = np.median(img_data[mask_img_data > 0])
     btthresh = img_median * 0.75
-    usans = [tuple([mean_img, btthresh])]
+    usans = [tuple([mean_image, btthresh])]
 
     return usans, btthresh
 
