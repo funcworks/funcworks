@@ -220,7 +220,7 @@ def fsl_first_level_wf(model,
         setup_susan = pe.MapNode(Function(input_names=['func', 'brain_mask', 'mean_image'],
                                           output_names=['usans', 'brightness_threshold'],
                                           function=utils.get_smoothing_info_fsl),
-                                 iterfield=['func', 'brain_mask'],
+                                 iterfield=['func', 'brain_mask', 'mean_image'],
                                  name='setup_susan')
 
         run_susan = pe.MapNode(fsl.SUSAN(),
