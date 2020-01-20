@@ -11,7 +11,7 @@ def get_contrasts(step, include_contrasts):
     for contrast in dummy_contrasts:
         if contrast not in include_contrasts:
             continue
-        all_contrasts.append((contrast, 'T',
+        all_contrasts.append((contrast.split('.')[-1], 'T',
                               [contrast],
                               [1]))
     for contrast in contrasts:
