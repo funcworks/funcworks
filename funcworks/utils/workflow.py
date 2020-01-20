@@ -178,10 +178,10 @@ def rename_outputs(bids_dir, output_dir, contrasts, entities,
     output_path = os.path.join(output_dir, 'run_level')
     os.makedirs(output_path, exist_ok=True)
     os.makedirs(os.path.join(output_path, 'sub-' + entities["subject"]), exist_ok=True)
-    if 'session' in entities:
+    if 'ses' in entities:
         os.makedirs(os.path.join(output_path,
                                  'sub-' + entities["subject"],
-                                 'ses-' + entities["session"]),
+                                 'ses-' + entities["ses"]),
                     exist_ok=True)
     outputs = {'p':[], 'dof':[]}
     contrast_names = [x[0] for x in contrasts]
