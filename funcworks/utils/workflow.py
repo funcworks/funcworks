@@ -187,7 +187,7 @@ def rename_outputs(bids_dir, output_dir, contrasts, entities,
     contrast_names = [x[0] for x in contrasts]
     for stat, file_list in stat_dict.items():
         outputs[stat] = []
-        if isinstance(file_list, None):
+        if not file_list:
             continue
         for idx, file in enumerate(file_list):
             entities['contrast'] = snake_to_camel(contrast_names[idx])
