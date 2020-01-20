@@ -85,7 +85,7 @@ def get_confounds(func):
     entities['desc'] = 'confounds'
     entities['suffix'] = 'regressors'
     confounds_pattern = \
-    'sub-{subject}[_ses-{ses}]_task-{task}_run-{run}_desc-{desc}_{suffix}.tsv'
+    'sub-{sub}[_ses-{ses}]_task-{task}_run-{run}_desc-{desc}_{suffix}.tsv'
     confound_file = op.join(op.dirname(func),
                             layout.build_path(entities, path_patterns=confounds_pattern))
     return confound_file
@@ -102,7 +102,7 @@ def get_metadata(func):
     entities['desc'] = 'preproc'
     entities['suffix'] = 'bold'
     meta_pattern = \
-    'sub-{subject}[_ses-{ses}]_task-{task}_run-{run}[_space-{space}]_desc-{desc}_{suffix}.json'
+    'sub-{sub}[_ses-{ses}]_task-{task}_run-{run}[_space-{space}]_desc-{desc}_{suffix}.json'
     meta_file = op.join(op.dirname(func),
                         layout.build_path(entities, path_patterns=meta_pattern))
     with open(meta_file) as omf:
