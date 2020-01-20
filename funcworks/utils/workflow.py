@@ -77,17 +77,35 @@ def get_info(confounds, events, confound_regressors, condition_names):
 def get_confounds(func):
     #A workaround to a current issue in pybids
     #that causes massive resource use when indexing derivative tsv files
-    lead = func.split('desc')[0]
-    confound_file = lead + 'desc-confounds_regressors.tsv'
+    import os.path as op
+    import bids
+    layout = bids.BIDSLayout('', validate=False)
+    entities = {pair.split('-')[0]:pair.split('-')[1] \
+                for pair in op.basename(func).split('_') if '-' in pair}
+    entities['desc'] = 'confounds'
+    entities['suffix'] = 'regressors'
+    confounds_pattern = \
+    'sub-{subject}[_ses-{session}]_task-{task}_run-{run}_desc-{desc}_{suffix}.tsv'
+    confound_file = op.join(op.dirname(func),
+                            layout.build_path(entities, path_patterns=confounds_pattern))
     return confound_file
 
 def get_metadata(func):
+    import os.path as op
     import json
+    import bids
     import nibabel as nb
     num_timepoints = nb.load(func).get_data().shape[3]
-    lead = func.split('.nii.gz')[0]
-    metafile = lead + '.json'
-    with open(metafile) as omf:
+    layout = bids.BIDSLayout('', validate=False)
+    entities = {pair.split('-')[0]:pair.split('-')[1] \
+                for pair in op.basename(func).split('_') if '-' in pair}
+    entities['desc'] = 'preproc'
+    entities['suffix'] = 'bold'
+    meta_pattern = \
+    'sub-{subject}[_ses-{sesssion}]_task-{task}_run-{run}[_space-{space}]_desc-{desc}_{suffix}.json'
+    meta_file = op.join(op.dirname(func),
+                        layout.build_path(entities, path_patterns=meta_pattern))
+    with open(meta_file) as omf:
         metadata = json.load(omf)
 
     return metadata['RepetitionTime'], num_timepoints
