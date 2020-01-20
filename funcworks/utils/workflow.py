@@ -87,7 +87,8 @@ def get_confounds(func):
     confounds_pattern = \
     'sub-{sub}[_ses-{ses}]_task-{task}_run-{run}_desc-{desc}_{suffix}.tsv'
     confound_file = op.join(op.dirname(func),
-                            layout.build_path(entities, path_patterns=confounds_pattern))
+                            layout.build_path(entities, path_patterns=confounds_pattern,
+                                              validate=False))
     return confound_file
 
 def get_metadata(func):
@@ -104,7 +105,8 @@ def get_metadata(func):
     meta_pattern = \
     'sub-{sub}[_ses-{ses}]_task-{task}_run-{run}[_space-{space}]_desc-{desc}_{suffix}.json'
     meta_file = op.join(op.dirname(func),
-                        layout.build_path(entities, path_patterns=meta_pattern))
+                        layout.build_path(entities, path_patterns=meta_pattern,
+                                          validate=False))
     with open(meta_file) as omf:
         metadata = json.load(omf)
 
@@ -149,7 +151,8 @@ def get_entities(func):
     return run_entities
 
 def rename_outputs(bids_dir, output_dir, contrasts, entities,
-                   effects=None, variances=None, zstats=None, pstats=None, tstats=None, fstats=None, dof=None):
+                   effects=None, variances=None, zstats=None,
+                   pstats=None, tstats=None, fstats=None, dof=None):
     import os #pylint: disable=W0621,W0404
     import subprocess
     import shutil
