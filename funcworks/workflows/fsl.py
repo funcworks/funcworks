@@ -45,6 +45,9 @@ def fsl_first_level_wf(model,
     work_dir = Path(work_dir)
     workflow = pe.Workflow(name=name)
 
+    space = None
+    if 'space' in model['Input']:
+        space = model['Input']['space']
     workflow.__desc__ = ""
     workflow.base_dir = work_dir / model['Name']
     confound_names = \
@@ -59,13 +62,13 @@ def fsl_first_level_wf(model,
     bdg.inputs.output_query = {'func': {'datatype':'func', 'desc':'preproc',
                                         'extension':'nii.gz',
                                         'suffix':'bold',
-                                        'task': model['Input']['task'], 'space':None},
+                                        'task': model['Input']['task'], 'space':space},
                                'events': {'datatype':'func', 'suffix':'events', 'extension':'tsv',
                                           'task': model['Input']['task']},
                                'brain_mask': {'datatype': 'func', 'desc': 'brain',
                                               'extension': 'nii.gz',
                                               'suffix':'mask', 'task': model['Input']['task'],
-                                              'space':None}}
+                                              'space':space}}
 
     exec_get_metadata = pe.MapNode(Function(input_names=['func'],
                                             output_names=['repetition_time', 'num_timepoints'],
@@ -215,7 +218,7 @@ def fsl_first_level_wf(model,
         get_tmean_img = pe.MapNode(fsl.ImageMaths(op_string='-Tmean',
                                                   suffix='_mean'),
                                    iterfield=['in_file'],
-                                   name='smooth_meanfunc')
+                                   name='get_tmean_img')
 
         setup_susan = pe.MapNode(Function(input_names=['func', 'brain_mask', 'mean_image'],
                                           output_names=['usans', 'brightness_threshold'],
