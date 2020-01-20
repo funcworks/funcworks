@@ -203,7 +203,7 @@ def rename_outputs(bids_dir, output_dir, contrasts, entities,
                                          layout.build_path(entities,
                                                            contrast_pattern,
                                                            validate=False))
-                outputs['pstats'].append(dest_path)
+                outputs['p'].append(dest_path)
                 subprocess.Popen(['fslmaths', f'{file}', '-ztop', f'{dest_path}']).wait()
             #Produce dof file if one doesn't exist for a contrast
             dest_path = os.path.join(output_path,
