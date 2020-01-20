@@ -163,14 +163,14 @@ def rename_outputs(bids_dir, output_dir, contrasts, entities,
         return words[0] + ''.join(word.title() for word in words[1:])
     stat_dict = dict(effects=effects,
                      variances=variances,
-                     zstats=zstats,
-                     tstats=tstats,
-                     fstats=fstats)
-    dof_pattern = ('[sub-{subject}/][ses-{session}/]sub-{subject}'
-                   '[_ses-{session}]_task-{task}[_acq-{acquisition}][_rec-{reconstruction}]'
+                     z=zstats,
+                     t=tstats,
+                     F=fstats)
+    dof_pattern = ('[sub-{subject}/][ses-{ses}/]sub-{subject}'
+                   '[_ses-{ses}]_task-{task}[_acq-{acquisition}][_rec-{reconstruction}]'
                    '[_run-{run}][_echo-{echo}][_space-{space}]_contrast-{contrast}_dof.tsv')
-    contrast_pattern = ('[sub-{subject}/][ses-{session}/]' \
-                       '[sub-{subject}_][ses-{session}_]task-{task}[_acq-{acquisition}]'
+    contrast_pattern = ('[sub-{subject}/][ses-{ses}/]' \
+                       '[sub-{subject}_][ses-{ses}_]task-{task}[_acq-{acquisition}]'
                        '[_rec-{reconstruction}][_run-{run}][_echo-{echo}][_space-{space}]_'
                        'contrast-{contrast}_stat-{stat<effect|variance|z|p|t|F>}_statmap.nii.gz')
     layout = BIDSLayout(bids_dir, validate=False)
@@ -183,7 +183,7 @@ def rename_outputs(bids_dir, output_dir, contrasts, entities,
                                  'sub-' + entities["subject"],
                                  'ses-' + entities["session"]),
                     exist_ok=True)
-    outputs = {'pstats':[], 'dof':[]}
+    outputs = {'p':[], 'dof':[]}
     contrast_names = [x[0] for x in contrasts]
     for stat, file_list in stat_dict.items():
         outputs[stat] = []
@@ -197,7 +197,7 @@ def rename_outputs(bids_dir, output_dir, contrasts, entities,
             #os.makedirs(os.path.dirname(dest_path), exist_ok=True)
             shutil.copy(file, dest_path)
             outputs[stat].append(dest_path)
-            if stat == 'zstats':
+            if stat == 'z':
                 entities['stat'] = 'p'
                 dest_path = os.path.join(output_path,
                                          layout.build_path(entities,
@@ -213,10 +213,10 @@ def rename_outputs(bids_dir, output_dir, contrasts, entities,
                 outputs['dof'].append(dest_path)
     effects = outputs['effects']
     variances = outputs['variances']
-    zstats = outputs['zstats']
-    pstats = outputs['pstats']
-    tstats = outputs['tstats']
-    fstats = outputs['fstats']
+    zstats = outputs['z']
+    pstats = outputs['p']
+    tstats = outputs['t']
+    fstats = outputs['F']
     dof = outputs['dof']
     return effects, variances, zstats, pstats, tstats, dof, fstats
 
