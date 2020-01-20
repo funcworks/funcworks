@@ -12,7 +12,7 @@ def get_contrasts(step, include_contrasts):
         if contrast not in include_contrasts:
             continue
         all_contrasts.append((contrast, 'T',
-                              [contrast.split('.')[-1]],
+                              [contrast],
                               [1]))
     for contrast in contrasts:
         if not any([all([x in contrast['ConditionList'], y in contrast['ConditionList']]) \
@@ -21,16 +21,14 @@ def get_contrasts(step, include_contrasts):
             continue
 
         if contrast['Name'] == 'task_vs_baseline':
-            condition_list = [x.split('.')[-1] if '.' in x else x for x in include_contrasts]
             weight_vector = [1 * 1 / len(include_contrasts)] * len(include_contrasts)
             all_contrasts.append((contrast['Name'], contrast['Type'].upper(),
-                                  condition_list,
+                                  include_contrasts,
                                   weight_vector))
         else:
-            condition_list = \
-            [x.split('.')[-1] if '.' in x else x for x in contrast['ConditionList']]
+
             all_contrasts.append((contrast['Name'], contrast['Type'].upper(),
-                                  condition_list,
+                                  contrast['ConditionList'],
                                   contrast['Weights']))
     return all_contrasts
 
