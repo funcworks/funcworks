@@ -191,7 +191,7 @@ def rename_outputs(bids_dir, output_dir, contrasts, entities,
             continue
         for idx, file in enumerate(file_list):
             entities['contrast'] = snake_to_camel(contrast_names[idx])
-            entities['stat'] = stat[0].lower()
+            entities['stat'] = stat
             dest_path = os.path.join(output_path,
                                      layout.build_path(entities, contrast_pattern, validate=False))
             #os.makedirs(os.path.dirname(dest_path), exist_ok=True)
