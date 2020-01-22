@@ -1,3 +1,4 @@
+#pylint: disable=C0415
 #Run Level Functions
 def get_contrasts(step, include_contrasts):
     """
@@ -78,8 +79,7 @@ def get_confounds(func):
     #A workaround to a current issue in pybids
     #that causes massive resource use when indexing derivative tsv files
     import os.path as op
-    import bids
-    layout = bids.BIDSLayout('', validate=False)
+    from bids.layout.writing import build_path
     entities = {pair.split('-')[0]:pair.split('-')[1] \
                 for pair in op.basename(func).split('_') if '-' in pair}
     entities['desc'] = 'confounds'
@@ -87,17 +87,15 @@ def get_confounds(func):
     confounds_pattern = \
     'sub-{sub}[_ses-{ses}]_task-{task}_run-{run}_desc-{desc}_{suffix}.tsv'
     confound_file = op.join(op.dirname(func),
-                            layout.build_path(entities, path_patterns=confounds_pattern,
-                                              validate=False))
+                            build_path(entities, path_patterns=confounds_pattern))
     return confound_file
 
 def get_metadata(func):
     import os.path as op
     import json
-    import bids
+    from bids.layout.writing import build_path
     import nibabel as nb
     num_timepoints = nb.load(func).get_data().shape[3]
-    layout = bids.BIDSLayout('', validate=False)
     entities = {pair.split('-')[0]:pair.split('-')[1] \
                 for pair in op.basename(func).split('_') if '-' in pair}
     entities['desc'] = 'preproc'
@@ -105,8 +103,7 @@ def get_metadata(func):
     meta_pattern = \
     'sub-{sub}[_ses-{ses}]_task-{task}_run-{run}[_space-{space}]_desc-{desc}_{suffix}.json'
     meta_file = op.join(op.dirname(func),
-                        layout.build_path(entities, path_patterns=meta_pattern,
-                                          validate=False))
+                        build_path(entities, path_patterns=meta_pattern))
     with open(meta_file) as omf:
         metadata = json.load(omf)
 
@@ -156,7 +153,7 @@ def rename_outputs(bids_dir, output_dir, contrasts, entities,
     import os #pylint: disable=W0621,W0404
     import subprocess
     import shutil
-    from bids import BIDSLayout
+    from bids.layout.writing import build_path
     def snake_to_camel(string):
         string.replace('.', '_')
         words = string.replace('.', '').split('_')
@@ -173,7 +170,6 @@ def rename_outputs(bids_dir, output_dir, contrasts, entities,
                        '[sub-{subject}_][ses-{ses}_]task-{task}[_acq-{acquisition}]'
                        '[_rec-{reconstruction}][_run-{run}][_echo-{echo}][_space-{space}]_'
                        'contrast-{contrast}_stat-{stat<effect|variance|z|p|t|F>}_statmap.nii.gz')
-    layout = BIDSLayout(bids_dir, validate=False)
 
     output_path = os.path.join(output_dir, 'run_level')
     os.makedirs(output_path, exist_ok=True)
@@ -193,21 +189,19 @@ def rename_outputs(bids_dir, output_dir, contrasts, entities,
             entities['contrast'] = snake_to_camel(contrast_names[idx])
             entities['stat'] = stat
             dest_path = os.path.join(output_path,
-                                     layout.build_path(entities, contrast_pattern, validate=False))
+                                     build_path(entities, contrast_pattern))
             #os.makedirs(os.path.dirname(dest_path), exist_ok=True)
             shutil.copy(file, dest_path)
             outputs[stat].append(dest_path)
             if stat == 'z':
                 entities['stat'] = 'p'
                 dest_path = os.path.join(output_path,
-                                         layout.build_path(entities,
-                                                           contrast_pattern,
-                                                           validate=False))
+                                         build_path(entities, contrast_pattern))
                 outputs['p'].append(dest_path)
                 subprocess.Popen(['fslmaths', f'{file}', '-ztop', f'{dest_path}']).wait()
             #Produce dof file if one doesn't exist for a contrast
             dest_path = os.path.join(output_path,
-                                     layout.build_path(entities, dof_pattern, validate=False))
+                                     build_path(entities, dof_pattern))
             if not os.path.isfile(dest_path):
                 shutil.copy(dof, dest_path)
                 outputs['dof'].append(dest_path)
