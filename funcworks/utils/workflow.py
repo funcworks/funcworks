@@ -1,4 +1,7 @@
-#pylint: disable=C0415
+"""
+Helper functions for FSL workflows
+"""
+#pylint: disable=C0415,R0913,R0914
 #Run Level Functions
 def get_contrasts(step, include_contrasts):
     """
@@ -147,7 +150,7 @@ def get_entities(func):
         run_entities.append(entities)
     return run_entities
 
-def rename_outputs(bids_dir, output_dir, contrasts, entities,
+def rename_outputs(output_dir, contrasts, entities,
                    effects=None, variances=None, zstats=None,
                    pstats=None, tstats=None, fstats=None, dof=None):
     import os #pylint: disable=W0621,W0404
@@ -246,15 +249,15 @@ def get_brainmask(subject_id, derivatives):
 
 def return_contrasts(subject_id, derivatives):
     import os.path as op
-    from bids import BIDSLayout
+    from bids.layout.writing import build_path
     from glob import glob
     contrasts = []
 
     run_level_dir = op.join(derivatives.replace('fmriprep', 'funcworks'), 'run_level')
-    layout = BIDSLayout(run_level_dir, validate=False)
-
+    base_pattern = ('sub-{sub}[/ses-{ses}]/sub-{sub}[_ses-{ses}]'
+                    '_task-{task}_run-??_contrast-{contrast}[_space-{space}]')
     for file in glob((f'{run_level_dir}/sub-{subject_id}/'
-                      f'sub-{subject_id}_task-study_run-0?_contrast-*.nii.gz')):
+                      f'sub-{subject_id}_task-study_run-0?_*_contrast-*.nii.gz')):
         entities = {pair.split('-')[0]:pair.split('-')[1] \
                     for pair in op.basename(file).split('_') if '-' in pair}
         if entities['contrast'] not in contrasts:
@@ -265,20 +268,16 @@ def return_contrasts(subject_id, derivatives):
     for contrast in contrasts:
         entities['contrast'] = contrast
         cope_path = op.join(run_level_dir,
-                            layout.build_path(entities,
-                                              path_patterns=('sub-{sub}[/ses-{ses}]/sub-{sub}[_ses-{ses}]'
-                                                             '_task-{task}_run-??_contrast-{contrast}'
-                                                             '_stat-effects_statmap.nii.gz'), validate=False))
+                            build_path(entities,
+                                       path_patterns=(base_pattern +
+                                                      '_stat-effects_statmap.nii.gz')))
         dof_path = op.join(run_level_dir,
-                           layout.build_path(entities,
-                                             path_patterns=('sub-{sub}[/ses-{ses}]/sub-{sub}[_ses-{ses}]'
-                                                            '_task-{task}_run-??_contrast-{contrast}'
-                                                            '_dof.tsv'), validate=False))
+                           build_path(entities,
+                                      path_patterns=(base_pattern + '_dof.tsv')))
         variances_path = op.join(run_level_dir,
-                                 layout.build_path(entities,
-                                                   path_patterns=('sub-{sub}[/ses-{ses}]/sub-{sub}[_ses-{ses}]'
-                                                                  '_task-{task}_run-??_contrast-{contrast}'
-                                                                  '_stat-variances_statmap.nii.gz'), validate=False))
+                                 build_path(entities,
+                                            path_patterns=(base_pattern +
+                                                           '_stat-variances_statmap.nii.gz')))
         contrast_dof[contrast] = sorted(glob(dof_path))
         contrast_file[contrast] = sorted(glob(cope_path))
         contrast_variances[contrast] = sorted(glob(variances_path))
@@ -290,14 +289,12 @@ def return_contrasts(subject_id, derivatives):
     return effects, variances, dofs
 
 
-def merge_runs(effects, variances, dofs, derivatives):
+def merge_runs(effects, variances, dofs):
     import os #pylint: disable=W0621,W0404
     import os.path as op
-    from bids import BIDSLayout
+    from bids.layout.writing import build_path
     import numpy as np
     import nibabel as nb
-    run_level_dir = os.path.join(derivatives.replace('fmriprep', 'funcworks'), 'run_level')
-    layout = BIDSLayout(run_level_dir, validate=False)
 
     full_effects = np.concatenate([np.expand_dims(nb.load(x).get_data(), 3) \
                                    for x in effects], axis=3)
@@ -309,37 +306,32 @@ def merge_runs(effects, variances, dofs, derivatives):
     affine = nb.load(effects[0]).affine
     entities = {pair.split('-')[0]:pair.split('-')[1] \
                 for pair in os.path.basename(effects[0]).split('_') if '-' in pair}
-    effects_img = nb.nifti1.Nifti1Image(full_variances, affine)
-    variances_img = nb.nifti1.Nifti1Image(full_variances, affine)
-    dofs_img = nb.nifti1.Nifti1Image(full_dofs, affine)
+
     effects_path = op.join(os.getcwd(),
-                           layout.build_path(entities,
-                                             path_patterns=('sub-{sub}[_ses-{ses}]'
-                                                            '_task-{task}_contrast-{contrast}'
-                                                            '_stat-effects_merged.nii.gz'),
-                                             validate=False))
-    nb.save(effects_img, effects_path)
+                           build_path(entities,
+                                      path_patterns=('sub-{sub}[_ses-{ses}]'
+                                                     '_task-{task}_contrast-{contrast}'
+                                                     '_stat-effects_merged.nii.gz')))
+    nb.save(nb.nifti1.Nifti1Image(full_variances, affine), effects_path)
     variances_path = op.join(os.getcwd(),
-                             layout.build_path(entities,
-                                               path_patterns=('sub-{sub}[_ses-{ses}]'
-                                                              '_task-{task}_contrast-{contrast}'
-                                                              '_stat-variances_merged.nii.gz'),
-                                               validate=False))
-    nb.save(variances_img, variances_path)
+                             build_path(entities,
+                                        path_patterns=('sub-{sub}[_ses-{ses}]'
+                                                       '_task-{task}_contrast-{contrast}'
+                                                       '_stat-variances_merged.nii.gz')))
+    nb.save(nb.nifti1.Nifti1Image(full_variances, affine), variances_path)
     dofs_path = op.join(os.getcwd(),
-                        layout.build_path(entities,
-                                          path_patterns=('sub-{sub}[_ses-{ses}]'
-                                                         '_task-{task}_contrast-{contrast}'
-                                                         '_stat-dof_merged.nii.gz'),
-                                          validate=False))
-    nb.save(dofs_img, dofs_path)
+                        build_path(entities,
+                                   path_patterns=('sub-{sub}[_ses-{ses}]'
+                                                  '_task-{task}_contrast-{contrast}'
+                                                  '_stat-dof_merged.nii.gz')))
+    nb.save(nb.nifti1.Nifti1Image(full_dofs, affine), dofs_path)
     return effects_path, variances_path, dofs_path
 
 
 def rename_contrasts(merged_effects, effects, variances, tstats, zstats, res4d):
     import os.path as op
-    from bids import BIDSLayout
-    layout = BIDSLayout('', validate=False)
+    from bids.layout.writing import build_path
+
     if not isinstance(merged_effects, list):
         merged_effects = [merged_effects]
     if not isinstance(effects, list):
@@ -357,33 +349,28 @@ def rename_contrasts(merged_effects, effects, variances, tstats, zstats, res4d):
     new_names = []
     for i, _ in enumerate(merged_effects):
         new_names.append((op.basename(effects[i]),
-                          layout.build_path(entities,
-                                            path_patterns=('sub-{sub}[_ses-{ses}]'
-                                                           '_task-{task}_contrast-{contrast}'
-                                                           '_stat-effects_statmap.nii.gz'),
-                                            validate=False)))
+                          build_path(entities,
+                                     path_patterns=('sub-{sub}[_ses-{ses}]'
+                                                    '_task-{task}_contrast-{contrast}'
+                                                    '_stat-effects_statmap.nii.gz'))))
         new_names.append((op.basename(variances[i]),
-                          layout.build_path(entities,
-                                            path_patterns=('sub-{sub}[_ses-{ses}]'
-                                                           '_task-{task}_contrast-{contrast}'
-                                                           '_stat-variances_statmap.nii.gz'),
-                                            validate=False)))
+                          build_path(entities,
+                                     path_patterns=('sub-{sub}[_ses-{ses}]'
+                                                    '_task-{task}_contrast-{contrast}'
+                                                    '_stat-variances_statmap.nii.gz'))))
         new_names.append((op.basename(tstats[i]),
-                          layout.build_path(entities,
-                                            path_patterns=('sub-{sub}[_ses-{ses}]'
-                                                           '_task-{task}_contrast-{contrast}'
-                                                           '_stat-t_statmap.nii.gz'),
-                                            validate=False)))
+                          build_path(entities,
+                                     path_patterns=('sub-{sub}[_ses-{ses}]'
+                                                    '_task-{task}_contrast-{contrast}'
+                                                    '_stat-t_statmap.nii.gz'))))
         new_names.append((op.basename(zstats[i]),
-                          layout.build_path(entities,
-                                            path_patterns=('sub-{sub}[_ses-{ses}]'
-                                                           '_task-{task}_contrast-{contrast}'
-                                                           '_stat-z_statmap.nii.gz'),
-                                            validate=False)))
+                          build_path(entities,
+                                     path_patterns=('sub-{sub}[_ses-{ses}]'
+                                                    '_task-{task}_contrast-{contrast}'
+                                                    '_stat-z_statmap.nii.gz'))))
         new_names.append((op.basename(res4d[i]),
-                          layout.build_path(entities,
-                                            path_patterns=('sub-{sub}[_ses-{ses}]'
-                                                           '_task-{task}_contrast-{contrast}'
-                                                           '_stat-residuals_statmap.nii.gz'),
-                                            validate=False)))
+                          build_path(entities,
+                                     path_patterns=('sub-{sub}[_ses-{ses}]'
+                                                    '_task-{task}_contrast-{contrast}'
+                                                    '_stat-residuals_statmap.nii.gz'))))
     return new_names

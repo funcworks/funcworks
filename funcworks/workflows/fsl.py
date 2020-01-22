@@ -22,18 +22,6 @@ def fsl_first_level_wf(model,
     This workflow generates processes function data with information given in
     the model file
 
-    model file contents
-    --------------------
-    contrasts = a dictionary containing contrast names as keys,
-                with each value containing information for FSL Featmodel
-                an example being {'contrast1_gt_contrast2' : 'T'}
-                where contrast1 and contrast2 are trial_types from the events.tsv
-    confounds = a list of confounds to use in regression model
-
-    Parameters
-    ----------
-    omp_nthreads
-
     """
     # # TODO:  Implement design matrix parser to produce figures and retrieve matrix
     #design_matrix_pattern = \
@@ -140,7 +128,7 @@ def fsl_first_level_wf(model,
     estimate_model.inputs.results_dir = 'results'
     estimate_model.inputs.smooth_autocorr = True
 
-    outputnode = pe.MapNode(Function(input_names=['bids_dir', 'output_dir',
+    outputnode = pe.MapNode(Function(input_names=['output_dir',
                                                   'contrasts', 'entities',
                                                   'effects', 'variances',
                                                   'zstats', 'tstats', 'dof'],
@@ -150,7 +138,6 @@ def fsl_first_level_wf(model,
                             iterfield=['entities', 'effects', 'variances',
                                        'zstats', 'tstats', 'dof', 'contrasts'],
                             name='outputnode')
-    outputnode.inputs.bids_dir = bids_dir
     outputnode.inputs.output_dir = output_dir
 
     #Setup connections among workflow nodes
@@ -282,16 +269,16 @@ def fsl_first_level_wf(model,
 
     '''
     if 'F' in [x[1] for x in exec_get_contrasts.outputs['contrasts']]:
-        outputnode = pe.MapNode(Function(input_names=['bids_dir', 'output_dir',
+        outputnode = pe.MapNode(Function(input_names=['output_dir',
                                                       'contrasts', 'entities',
-                                                      'effects', 'variances', 'zstats', 'tstats', 'stats', 'dof'],
+                                                      'effects', 'variances',
+                                                      'zstats', 'tstats', 'stats', 'dof'],
                                          output_names=['effects', 'variances', 'zstats',
                                                        'pstats', 'tstats', 'dof', 'fstats'],
                                          function=utils.rename_outputs),
                                 iterfield=['entities', 'effects', 'variances',
                                            'zstats', 'tstats', 'stats', 'dof'],
                                 name='outputnode')
-        outputnode.inputs.bids_dir = bids_dir
         outputnode.inputs.output_dir = output_dir
         workflow.connect(estimate_model, 'fstats', outputnode, 'fstats')
     '''
@@ -313,10 +300,15 @@ def fsl_session_level_wf(output_dir,
                          work_dir,
                          derivatives,
                          name='fsl_session_level_wf'):
+    """
+    This workflow generates processes functional_data across a single session (read: between runs)
+    and computes effects, variances, residuals and statmaps
+    using FSLs FLAME0 given information in the bids model file
 
+    """
     workflow = pe.Workflow(name=name)
     workflow.base_dir = work_dir
-
+    workflow.desc = ""
     return_conts = pe.Node(Function(input_names=['subject_id', 'derivatives'],
                                     output_names=['effects', 'variances', 'dofs'],
                                     function=utils.return_contrasts), name='return_conts')
@@ -330,7 +322,6 @@ def fsl_session_level_wf(output_dir,
                                       function=utils.merge_runs),
                              iterfield=['effects', 'variances', 'dofs'],
                              name='merge_conts')
-    merge_conts.inputs.derivatives = derivatives
     workflow.connect(return_conts, 'effects', merge_conts, 'effects')
     workflow.connect(return_conts, 'variances', merge_conts, 'variances')
     workflow.connect(return_conts, 'dofs', merge_conts, 'dofs')

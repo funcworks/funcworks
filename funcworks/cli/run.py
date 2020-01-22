@@ -10,6 +10,7 @@ from pathlib import Path
 from time import strftime
 from multiprocessing import cpu_count
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+#pylint: disable=C0103,R0913,R0914,W0404
 
 logging.addLevelName(25, 'IMPORTANT')  # Add a new level between INFO and WARNING
 logging.addLevelName(15, 'VERBOSE')  # Add a new level between INFO and DEBUG
@@ -25,7 +26,7 @@ def check_deps(workflow):
 
 def _warn_redirect(message, category, filename, lineno, file=None, line=None):
     logger.warning('Captured warning (%s): %s', category, message)
-    
+
 def get_parser():
     """Build Parser Object"""
     parser = ArgumentParser(description='FUNCWORKs: fMRI FUNCtional WORKflows',
@@ -60,7 +61,7 @@ def get_parser():
     parser.add_argument('--use-rapidart', action='store_true', default=False,
                         help='Use RapidArt artifact detection algorithm')
     parser.add_argument('--use-plugin', action='store', default=None,
-                         help='nipype plugin configuration file')
+                        help='nipype plugin configuration file')
     return parser
 
 def main():
@@ -69,7 +70,7 @@ def main():
     from multiprocessing import set_start_method, Process, Manager
     set_start_method('forkserver')
     warnings.showwarning = _warn_redirect
-    
+
     opts = get_parser().parse_args()
     exec_env = os.name
 
@@ -86,11 +87,11 @@ def main():
         raise NotImplementedError((f'{opts.analysis_level} not yet implemented'))
     with Manager() as mgr:
         retval = mgr.dict()
-        
+
         p = Process(target=build_workflow, args=(opts, retval))
         p.start()
         p.join()
-        
+
         retcode = p.exitcode or retval.get('return_code', 0)
 
         bids_dir = retval.get('bids_dir')
@@ -100,7 +101,7 @@ def main():
         funcworks_wf = retval.get('workflow', None)
         run_uuid = retval.get('run_uuid', None)
         plugin_settings = retval.get('plugin_settings')
-        
+
     retcode = retcode or int(funcworks_wf is None)
     if retcode != 0:
         sys.exit(retcode)
@@ -156,7 +157,7 @@ def build_workflow(opts, retval):
       * Participant list: {participant_label}.
       * Run identifier: {uuid}.
     """.format
-    
+
     bids_dir = opts.bids_dir.resolve()
     output_dir = opts.output_dir.resolve()
     work_dir = opts.work_dir.resolve()
