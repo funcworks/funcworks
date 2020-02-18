@@ -74,9 +74,10 @@ def init_funcworks_single_subject_wf(model,
                                      name):
 
     funcworks_single_subject_wf = Workflow(name=name)
-    run_model = None
+    stage = None
     for step in model['Steps']:
-        if not run_model:
+        if step == 'run':
+            stage = 'run'
             run_model = fsl_first_level_wf(model=model,
                                            step=step,
                                            bids_dir=bids_dir,
@@ -90,17 +91,16 @@ def init_funcworks_single_subject_wf(model,
                                            use_rapidart=use_rapidart)
             funcworks_single_subject_wf.add_nodes([run_model])
         '''
-        if not subject_model:
-            subject_model = fsl_second_level_wf(model=model,
-                                                step=step,
-                                                bids_dir=bids_dir,
-                                                output_dir=output_dir,
-                                                work_dir=work_dir,
-                                                subject_id=subject_id,
-                                                smoothing=smoothing,
-                                                derivatives=derivatives)
-                                                '''
-
+        elif step == 'session':
+            session_model = fsl_session_level_wf(model=model,
+                                                 step=step,
+                                                 bids_dir=bids_dir,
+                                                 output_dir=output_dir,
+                                                 work_dir=work_dir,
+                                                 subject_id=subject_id,
+                                                 derivatives=derivatives)
+            funcworks_single_subject_wf.add_nodes([session_model])
+        '''
         if step == analysis_level:
             break
     return funcworks_single_subject_wf

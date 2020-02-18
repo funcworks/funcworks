@@ -150,6 +150,11 @@ def get_entities(func):
         run_entities.append(entities)
     return run_entities
 
+def snake_to_camel(string):
+    string.replace('.', '_')
+    words = string.replace('.', '').split('_')
+    return words[0] + ''.join(word.title() for word in words[1:])
+
 def rename_outputs(output_dir, contrasts, entities,
                    effects=None, variances=None, zstats=None,
                    pstats=None, tstats=None, fstats=None, dof=None):
@@ -157,10 +162,7 @@ def rename_outputs(output_dir, contrasts, entities,
     import subprocess
     import shutil
     from bids.layout.writing import build_path
-    def snake_to_camel(string):
-        string.replace('.', '_')
-        words = string.replace('.', '').split('_')
-        return words[0] + ''.join(word.title() for word in words[1:])
+
     stat_dict = dict(effects=effects,
                      variances=variances,
                      z=zstats,
@@ -328,7 +330,7 @@ def merge_runs(effects, variances, dofs):
     return effects_path, variances_path, dofs_path
 
 
-def rename_contrasts(merged_effects, effects, variances, tstats, zstats, res4d):
+def rename_contrasts(effects, variances, tstats, zstats, res4d):
     import os.path as op
     from bids.layout.writing import build_path
 
@@ -347,7 +349,7 @@ def rename_contrasts(merged_effects, effects, variances, tstats, zstats, res4d):
     entities = {pair.split('-')[0]:pair.split('-')[1] \
                 for pair in op.basename(merged_effects[0]).split('_') if '-' in pair}
     new_names = []
-    for i, _ in enumerate(merged_effects):
+    for i in range(len(effects)):
         new_names.append((op.basename(effects[i]),
                           build_path(entities,
                                      path_patterns=('sub-{sub}[_ses-{ses}]'
