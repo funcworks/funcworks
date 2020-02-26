@@ -3,9 +3,9 @@ import json
 from pathlib import Path
 from copy import deepcopy
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
-from .fsl import fsl_first_level_wf, fsl_session_level_wf
+from .fsl import fsl_first_level_wf#, fsl_session_level_wf
 #pylint: disable=R0913,R0914
-def init_funcworks_wf(model,
+def init_funcworks_wf(model_file,
                       bids_dir,
                       output_dir,
                       work_dir,
@@ -15,7 +15,7 @@ def init_funcworks_wf(model,
                       derivatives,
                       run_uuid,
                       use_rapidart):
-    with open(model, 'r') as read_mdl:
+    with open(model_file, 'r') as read_mdl:
         model_dict = json.load(read_mdl)
 
     funcworks_wf = Workflow(name='funcworks_wf')
@@ -38,20 +38,22 @@ def init_funcworks_wf(model,
         smoothing_type = None
 
     for subject_id in participants:
-        single_subject_wf = init_funcworks_single_subject_wf(model=model_dict,
-                                                             bids_dir=bids_dir,
-                                                             output_dir=output_dir,
-                                                             work_dir=work_dir,
-                                                             subject_id=subject_id,
-                                                             analysis_level=analysis_level,
-                                                             smoothing_fwhm=smoothing_fwhm,
-                                                             smoothing_level=smoothing_level,
-                                                             smoothing_type=smoothing_type,
-                                                             derivatives=derivatives,
-                                                             use_rapidart=use_rapidart,
-                                                             name=f'single_subject_{subject_id}_wf')
-        single_subject_wf.config['execution']['crashdump_dir'] = os.path.join(
-            output_dir, "funcworks", "sub-" + subject_id, 'log', run_uuid)
+        single_subject_wf = init_funcworks_subject_wf(model=model_dict,
+                                                      bids_dir=bids_dir,
+                                                      output_dir=output_dir,
+                                                      work_dir=work_dir,
+                                                      subject_id=subject_id,
+                                                      analysis_level=analysis_level,
+                                                      smoothing_fwhm=smoothing_fwhm,
+                                                      smoothing_level=smoothing_level,
+                                                      smoothing_type=smoothing_type,
+                                                      derivatives=derivatives,
+                                                      use_rapidart=use_rapidart,
+                                                      name=f'single_subject_{subject_id}_wf')
+        crash_dir = Path(output_dir) / 'logs' / f'sub-{subject_id}' / run_uuid
+        crash_dir.mkdir(exist_ok=True, parents=True)
+
+        single_subject_wf.config['execution']['crashdump_dir'] = crash_dir
 
         for node in single_subject_wf._get_all_nodes():
             node.config = deepcopy(single_subject_wf.config)
@@ -60,23 +62,23 @@ def init_funcworks_wf(model,
 
     return funcworks_wf
 
-def init_funcworks_single_subject_wf(model,
-                                     bids_dir,
-                                     output_dir,
-                                     work_dir,
-                                     subject_id,
-                                     analysis_level,
-                                     smoothing_fwhm,
-                                     smoothing_level,
-                                     smoothing_type,
-                                     derivatives,
-                                     use_rapidart,
-                                     name):
+def init_funcworks_subject_wf(model,
+                              bids_dir,
+                              output_dir,
+                              work_dir,
+                              subject_id,
+                              analysis_level,
+                              smoothing_fwhm,
+                              smoothing_level,
+                              smoothing_type,
+                              derivatives,
+                              use_rapidart,
+                              name):
 
     funcworks_single_subject_wf = Workflow(name=name)
     stage = None
     for step in model['Steps']:
-        if step == 'run':
+        if step['Level'] == 'run':
             stage = 'run'
             run_model = fsl_first_level_wf(model=model,
                                            step=step,
@@ -90,8 +92,14 @@ def init_funcworks_single_subject_wf(model,
                                            derivatives=derivatives,
                                            use_rapidart=use_rapidart)
             funcworks_single_subject_wf.add_nodes([run_model])
-        '''
+
+
         elif step == 'session':
+            raise NotImplementedError(f'{step} level processing not currently implemented')
+        else:
+            raise ValueError(f'Unknown analyis level {step}')
+
+        '''
             session_model = fsl_session_level_wf(model=model,
                                                  step=step,
                                                  bids_dir=bids_dir,

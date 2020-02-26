@@ -97,7 +97,7 @@ class BIDSDataSink(IOBase):
 
             out_fname = os.path.join(
                 base_dir, layout.build_path(
-                    ents, path_patterns, validate=False))
+                    ents, path_patterns))
             os.makedirs(os.path.dirname(out_fname), exist_ok=True)
 
             _copy_or_convert(in_file, out_fname)

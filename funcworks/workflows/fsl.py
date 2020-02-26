@@ -5,8 +5,9 @@ from nipype.interfaces import fsl, io
 from nipype.interfaces.utility import Function, IdentityInterface
 from nipype.algorithms import modelgen, rapidart as ra
 from ..interfaces.bids import (BIDSDataSink)
+from ..interfaces.io import GetModelInfo
 from .. import utils
-# pylint: disable=C0415,R0915,R0914,R0913
+# pylint: disable=R0915,R0914,R0913
 def fsl_first_level_wf(model,
                        step,
                        bids_dir,
@@ -34,115 +35,93 @@ def fsl_first_level_wf(model,
     work_dir = Path(work_dir)
     workflow = pe.Workflow(name=name)
 
-    space = None
-    if 'space' in model['Input']:
-        space = model['Input']['space']
+    if smoothing_type == 'iso':
+        dimensionality = 3
+    elif smoothing_type == 'inp':
+        dimensionality = 2
+
+    fixed_entities = model['Input']
+    if 'space' not in fixed_entities:
+        fixed_entities['space'] = None
+
     workflow.__desc__ = ""
     workflow.base_dir = work_dir / model['Name']
-    confound_names = \
-    [x for x in step['Model']['X'] if x not in step['DummyContrasts']['Conditions']]
-    condition_names = step['DummyContrasts']['Conditions']
 
-    bdg = pe.Node(io.BIDSDataGrabber(base_dir=bids_dir, subject=subject_id,
-                                     extra_derivatives=derivatives, index_derivatives=True,
-                                     output_query={'func': {'datatype':'func', 'desc':'preproc',
-                                                            'extension':'nii.gz',
-                                                            'suffix':'bold',
-                                                            'task': model['Input']['task'],
-                                                            'space':space},
-                                                   'events': {'datatype':'func', 'suffix':'events',
-                                                              'extension':'tsv',
-                                                              'task': model['Input']['task']},
-                                                   'brain_mask': {'datatype': 'func', 'desc': 'brain',
-                                                                  'extension': 'nii.gz',
-                                                                  'suffix':'mask',
-                                                                  'task': model['Input']['task'],
-                                                                  'space':space}}),
-                  name='bdg')
+    bdg = pe.Node(
+        io.BIDSDataGrabber(base_dir=bids_dir, subject=subject_id,
+                           extra_derivatives=derivatives, index_derivatives=True,
+                           output_query={'func': {'datatype':'func', 'desc':'preproc',
+                                                  'extension':'nii.gz', 'suffix':'bold',
+                                                  'task': fixed_entities['task'],
+                                                  'space': fixed_entities['space']},
+                                         'events': {'datatype':'func', 'suffix':'events',
+                                                    'extension':'tsv',
+                                                    'task': fixed_entities['task']},
+                                         'brain_mask': {'datatype': 'func', 'desc': 'brain',
+                                                        'extension': 'nii.gz', 'suffix':'mask',
+                                                        'task': fixed_entities['task'],
+                                                        'space': fixed_entities['space']}}),
+        name='bdg')
 
-    exec_get_metadata = pe.MapNode(Function(input_names=['func'],
-                                            output_names=['repetition_time', 'num_timepoints'],
-                                            function=utils.get_metadata),
-                                   iterfield=['func'],
-                                   name='exec_get_metadata')
+    get_info = pe.MapNode(
+        GetModelInfo(model=step),
+        iterfield=['functional_file', 'events_file'],
+        name='get_info')
 
-    exec_get_confounds = pe.MapNode(Function(input_names=['func'],
-                                             output_names=['confounds_file'],
-                                             function=utils.get_confounds),
-                                    iterfield=['func'],
-                                    name='exec_get_confounds')
+    apply_brainmask = pe.MapNode(
+        fsl.ImageMaths(suffix='_bet', op_string='-mas'),
+        iterfield=['in_file', 'in_file2'],
+        name='apply_brainmask')
 
-    apply_brainmask = pe.MapNode(fsl.ImageMaths(suffix='_bet',
-                                                op_string='-mas'),
-                                 iterfield=['in_file', 'in_file2'],
-                                 name='apply_brainmask')
-
-    exec_get_info = pe.MapNode(Function(input_names=['events',
-                                                     'confounds',
-                                                     'confound_regressors',
-                                                     'condition_names'],
-                                        output_names=['output', 'names'],
-                                        function=utils.get_info),
-                               iterfield=['events', 'confounds'],
-                               name='exec_get_info')
-
-    exec_get_contrasts = pe.MapNode(Function(input_names=['step', 'include_contrasts'],
-                                             output_names=['contrasts'],
-                                             function=utils.get_contrasts),
-                                    iterfield=['include_contrasts'],
-                                    name='exec_get_contrasts')
+    exec_get_contrasts = pe.MapNode(
+        Function(input_names=['step', 'include_contrasts'], output_names=['contrasts'],
+                 function=utils.get_contrasts),
+        iterfield=['include_contrasts'],
+        name='exec_get_contrasts')
     exec_get_contrasts.inputs.step = step
 
-    specify_model = pe.MapNode(modelgen.SpecifyModel(high_pass_filter_cutoff=-1.0,
-                                                     input_units='secs'),
-                               iterfield=['functional_runs', 'subject_info', 'time_repetition'],
-                               name='specify_model')
+    specify_model = pe.MapNode(
+        modelgen.SpecifyModel(high_pass_filter_cutoff=-1.0, input_units='secs'),
+        iterfield=['functional_runs', 'subject_info', 'time_repetition'],
+        name='specify_model')
 
-    fit_model = pe.MapNode(IdentityInterface(fields=['session_info', 'interscan_interval',
-                                                     'contrasts', 'film_threshold',
-                                                     'functional_data', 'bases',
-                                                     'model_serial_correlations'],
-                                             mandatory_inputs=True),
-                           iterfield=['functional_data', 'session_info',
-                                      'interscan_interval', 'contrasts'],
-                           name='fit_model')
-    fit_model.inputs.bases = {'dgamma':{'derivs': False}}
-    fit_model.inputs.film_threshold = 0.0
-    fit_model.inputs.model_serial_correlations = True
+    fit_model = pe.MapNode(
+        IdentityInterface(fields=['session_info', 'interscan_interval',
+                                  'contrasts', 'functional_data'],
+                          mandatory_inputs=True),
+        iterfield=['functional_data', 'session_info',
+                   'interscan_interval', 'contrasts'],
+        name='fit_model')
 
-    first_level_design = pe.MapNode(fsl.Level1Design(),
-                                    iterfield=['session_info', 'interscan_interval', 'contrasts'],
-                                    name='first_level_design')
+    first_level_design = pe.MapNode(
+        fsl.Level1Design(bases={'dgamma':{'derivs': False}},
+                         model_serial_correlations=True),
+        iterfield=['session_info', 'interscan_interval', 'contrasts'],
+        name='first_level_design')
 
-    generate_model = pe.MapNode(fsl.FEATModel(environ={'FSLOUTPUTTYPE': 'NIFTI_GZ'},
-                                              output_type='NIFTI_GZ'),
-                                iterfield=['fsf_file', 'ev_files'],
-                                name='generate_model')
+    generate_model = pe.MapNode(
+        fsl.FEATModel(environ={'FSLOUTPUTTYPE': 'NIFTI_GZ'},
+                      output_type='NIFTI_GZ'),
+        iterfield=['fsf_file', 'ev_files'],
+        name='generate_model')
 
-    estimate_model = pe.MapNode(fsl.FILMGLS(environ={'FSLOUTPUTTYPE': 'NIFTI_GZ'},
-                                            mask_size=5,
-                                            output_type='NIFTI_GZ',
-                                            results_dir='results',
-                                            smooth_autocorr=True),
-                                iterfield=['design_file', 'in_file', 'tcon_file'],
-                                name='estimate_model')
-
-    outputnode = pe.MapNode(Function(input_names=['output_dir',
-                                                  'contrasts', 'entities',
-                                                  'effects', 'variances',
-                                                  'zstats', 'tstats', 'dof'],
-                                     output_names=['effects', 'variances', 'zstats',
-                                                   'pstats', 'tstats', 'dof', 'fstats'],
-                                     function=utils.rename_outputs),
-                            iterfield=['entities', 'effects', 'variances',
-                                       'zstats', 'tstats', 'dof', 'contrasts'],
-                            name='outputnode')
-    outputnode.inputs.output_dir = output_dir
+    estimate_model = pe.MapNode(
+        fsl.FILMGLS(environ={'FSLOUTPUTTYPE': 'NIFTI_GZ'}, mask_size=5, threshold=0.0,
+                    output_type='NIFTI_GZ', results_dir='results', smooth_autocorr=True),
+        iterfield=['design_file', 'in_file', 'tcon_file'],
+        name='estimate_model')
 
     image_pattern = ('[sub-{subject}/][ses-{ses}/]'
                      '[sub-{subject}_][ses-{ses}_]task-{task}[_acq-{acquisition}]'
                      '[_rec-{reconstruction}][_run-{run}][_echo-{echo}][_space-{space}]'
                      '_contrast-{contrast}_stat-{stat<effect|variance|z|p|t|F>}_{suffix}.nii.gz')
+
+    #TODO: Modify get_entities to function as a producer of contrast specific entities
+    produce_contrast_entities = pe.MapNode(
+        Function(input_names=['func', 'contrasts'], output_names='contrast_entities',
+                 function=utils.get_entities),
+        iterfield=['func', 'contrasts'],
+        name='produce_contrast_entities')
 
     ds_effects = pe.MapNode(
         BIDSDataSink(base_directory=output_dir,
@@ -177,136 +156,127 @@ def fsl_first_level_wf(model,
         run_without_submitting=True,
         name='ds_fstats')
 
-    exec_get_motion_parameters = pe.MapNode(Function(input_names=['confounds'],
-                                                     output_names='motion_params',
-                                                     function=utils.get_motion_parameters),
-                                            iterfield=['confounds'],
-                                            name='exec_get_motion_parameters')
+    run_rapidart = pe.MapNode(
+        ra.ArtifactDetect(use_differences=[True, False], use_norm=True,
+                          zintensity_threshold=3, norm_threshold=1,
+                          bound_by_brainmask=True, mask_type='file',
+                          parameter_source='FSL'),
+        iterfield=['realignment_parameters', 'realigned_files', 'mask_file'],
+        name='run_rapidart')
 
-    run_rapidart = pe.MapNode(ra.ArtifactDetect(use_differences=[True, False],
-                                                use_norm=True,
-                                                zintensity_threshold=3,
-                                                norm_threshold=1,
-                                                bound_by_brainmask=True,
-                                                mask_type='file',
-                                                parameter_source='FSL'),
-                              iterfield=['realignment_parameters',
-                                         'realigned_files',
-                                         'mask_file'],
-                              name='run_rapidart')
+    reshape_rapidart = pe.MapNode(
+        Function(input_names=['run_info', 'metadata', 'outlier_files'],
+                 output_names=['confounds', 'confound_regressors'],
+                 function=utils.reshape_ra),
+        iterfield=['outlier_files', 'run_info', 'metadata'],
+        name='reshape_rapidart')
 
-    reshape_rapidart = pe.MapNode(Function(input_names=['outlier_files', 'confounds',
-                                                        'confound_regressors',
-                                                        'num_timepoints'],
-                                           output_names=['confounds', 'confound_regressors'],
-                                           function=utils.reshape_ra),
-                                  iterfield=['outlier_files', 'confounds', 'num_timepoints'],
-                                  name='reshape_rapidart')
-    reshape_rapidart.inputs.confound_regressors = confound_names
+    get_tmean_img = pe.MapNode(
+        fsl.ImageMaths(op_string='-Tmean', suffix='_mean'),
+        iterfield=['in_file'],
+        name='get_tmean_img')
 
-    get_tmean_img = pe.MapNode(fsl.ImageMaths(op_string='-Tmean',
-                                              suffix='_mean'),
-                               iterfield=['in_file'],
-                               name='get_tmean_img')
+    setup_susan = pe.MapNode(
+        Function(input_names=['func', 'brain_mask', 'mean_image'],
+                 output_names=['usans', 'brightness_threshold'],
+                 function=utils.get_smoothing_info_fsl),
+        iterfield=['func', 'brain_mask', 'mean_image'],
+        name='setup_susan')
 
-    setup_susan = pe.MapNode(Function(input_names=['func', 'brain_mask', 'mean_image'],
-                                      output_names=['usans', 'brightness_threshold'],
-                                      function=utils.get_smoothing_info_fsl),
-                             iterfield=['func', 'brain_mask', 'mean_image'],
-                             name='setup_susan')
+    run_susan = pe.MapNode(
+        fsl.SUSAN(),
+        iterfield=['in_file', 'brightness_threshold', 'usans'],
+        name='run_susan')
 
-    run_susan = pe.MapNode(fsl.SUSAN(),
-                           iterfield=['in_file', 'brightness_threshold', 'usans'],
-                           name='run_susan')
-    run_susan.inputs.fwhm = smoothing_fwhm
+    apply_mask_smooth = pe.MapNode(
+        fsl.ImageMaths(suffix='_bet', op_string='-mas'),
+        iterfield=['in_file', 'in_file2'],
+        name='apply_mask_smooth')
 
-    apply_mask_smooth = pe.MapNode(fsl.ImageMaths(suffix='_bet',
-                                                  op_string='-mas'),
-                                   iterfield=['in_file', 'in_file2'],
-                                   name='apply_mask_smooth')
-    #Setup connections among workflow nodes
-
+    #Setup connections among nodes
     workflow.connect([
         (bdg, apply_brainmask, [('func', 'in_file')]),
         (bdg, apply_brainmask, [('brain_mask', 'in_file2')]),
-        (bdg, exec_get_metadata, [('func', 'func')]),
-        (bdg, exec_get_confounds, [('func', 'func')])
+        (bdg, get_info, [('func', 'functional_file')]),
+        (bdg, get_info, [('events', 'events_file')])
     ])
 
     if use_rapidart:
         workflow.connect([
-            (exec_get_confounds, exec_get_motion_parameters, [('confounds_file', 'confounds')]),
-            (exec_get_motion_parameters, run_rapidart,
-             [('motion_params', 'realignment_parameters')]),
+            (get_info, run_rapidart,
+             [('motion_parameters', 'realignment_parameters')]),
             (bdg, run_rapidart, [('func', 'realigned_files')]),
             (bdg, run_rapidart, [('brain_mask', 'mask_file')]),
             (run_rapidart, reshape_rapidart, [('outlier_files', 'outlier_files')]),
-            (exec_get_confounds, reshape_rapidart, [('confounds_file', 'confounds')]),
-            (exec_get_metadata, reshape_rapidart, [('num_timepoints', 'num_timepoints')]),
-            (reshape_rapidart, exec_get_info, [('confounds', 'confounds')]),
-            (reshape_rapidart, exec_get_info, [('confound_regressors', 'confound_regressors')])
+            (get_info, reshape_rapidart, [('run_info', 'run_info')]),
+            (get_info, reshape_rapidart, [('run_metadata', 'metadata')]),
+            (reshape_rapidart, specify_model, [('run_info', 'subject_info')])
         ])
-
-        exec_get_info.iterfield = ['events', 'confounds', 'confound_regressors']
-
     else:
-        workflow.connect(exec_get_confounds, 'confounds_file', exec_get_info, 'confounds')
-        exec_get_info.inputs.confound_regressors = confound_names
-
-    exec_get_info.inputs.condition_names = condition_names
-    workflow.connect(bdg, 'events', exec_get_info, 'events')
+        workflow.connect([
+            (get_info, specify_model, [('run_info', 'subject_info')])
+        ])
 
     if smoothing_level == 'l1':
+        run_susan.inputs.fwhm = smoothing_fwhm
+        run_susan.inputs.dimension = dimensionality
         workflow.connect([
-            (apply_brainmask, 'out_file', get_tmean_img, 'in_file'),
-            (apply_brainmask, 'out_file', setup_susan, 'func'),
-            (bdg, 'brain_mask', setup_susan, 'brain_mask'),
-            (get_tmean_img, 'out_file', setup_susan, 'mean_image'),
-            (apply_brainmask, 'out_file', run_susan, 'in_file'),
-            (setup_susan, 'brightness_threshold', run_susan, 'brightness_threshold'),
-            (setup_susan, 'usans', run_susan, 'usans'),
-            (run_susan, 'smoothed_file', apply_mask_smooth, 'in_file'),
-            (bdg, 'brain_mask', apply_mask_smooth, 'in_file2'),
-            (apply_mask_smooth, 'out_file', specify_model, 'functional_runs'),
-            (apply_mask_smooth, 'out_file', fit_model, 'functional_data')
+            (apply_brainmask, get_tmean_img, [('out_file', 'in_file')]),
+            (apply_brainmask, setup_susan, [('out_file', 'func')]),
+            (bdg, setup_susan, [('brain_mask', 'brain_mask')]),
+            (get_tmean_img, setup_susan, [('out_file', 'mean_image')]),
+            (apply_brainmask, run_susan, [('out_file', 'in_file')]),
+            (setup_susan, run_susan, [('brightness_threshold', 'brightness_threshold')]),
+            (setup_susan, run_susan, [('usans', 'usans')]),
+            (run_susan, apply_mask_smooth, [('smoothed_file', 'in_file')]),
+            (bdg, apply_mask_smooth, [('brain_mask', 'in_file2')]),
+            (apply_mask_smooth, specify_model, [('out_file', 'functional_runs')]),
+            (apply_mask_smooth, fit_model, [('out_file', 'functional_data')])
         ])
     else:
         workflow.connect([
-            (apply_brainmask, 'out_file', specify_model, 'functional_runs'),
-            (apply_brainmask, 'out_file', fit_model, 'functional_data')
+            (apply_brainmask, specify_model, [('out_file', 'functional_runs')]),
+            (apply_brainmask, fit_model, [('out_file', 'functional_data')])
         ])
 
     workflow.connect([
-        (exec_get_info, 'output', specify_model, 'subject_info'),
-        (exec_get_metadata, 'repetition_time', specify_model, 'time_repetition'),
-        (exec_get_info, 'names', exec_get_contrasts, 'include_contrasts'),
-        (specify_model, 'session_info', fit_model, 'session_info'),
-        (exec_get_metadata, 'repetition_time', fit_model, 'interscan_interval'),
-        (exec_get_contrasts, 'contrasts', fit_model, 'contrasts'),
-        (fit_model, 'interscan_interval', first_level_design, 'interscan_interval'),
-        (fit_model, 'session_info', first_level_design, 'session_info'),
-        (fit_model, 'contrasts', first_level_design, 'contrasts'),
-        (fit_model, 'bases', first_level_design, 'bases'),
-        (fit_model, 'model_serial_correlations', first_level_design, 'model_serial_correlations'),
-        (first_level_design, 'fsf_files', generate_model, 'fsf_file'),
-        (first_level_design, 'ev_files', generate_model, 'ev_files'),
-        (fit_model, 'film_threshold', estimate_model, 'threshold'),
-        (fit_model, 'functional_data', estimate_model, 'in_file'),
-        (generate_model, 'design_file', estimate_model, 'design_file'),
-        (generate_model, 'con_file', estimate_model, 'tcon_file'),
-        (bdg, ('func', utils.get_entities), outputnode, 'entities'),
-        (estimate_model, 'copes', ds_effects, 'in_file'),
-        (estimate_model, 'varcopes', ds_variances, 'in_file'),
-        (estimate_model, 'zstats', ds_zstats, 'in_file'),
-        (estimate_model, 'tstats', ds_tstats, 'in_file'),
-        (estimate_model, 'fstats', ds_fstats, 'in_file'),
+        (get_info, specify_model, [('repetition_time', 'time_repetition')]),
+
+        (specify_model, fit_model, [('session_info', 'session_info')]),
+        (get_info, fit_model, [('repetition_time', 'interscan_interval')]),
+        (get_info, fit_model, [('run_contrasts', 'contrasts')]),
+
+        (fit_model, first_level_design, [('interscan_interval', 'interscan_interval')]),
+        (fit_model, first_level_design, [('session_info', 'session_info')]),
+        (fit_model, first_level_design, [('contrasts', 'contrasts')]),
+
+        (first_level_design, generate_model, [('fsf_files', 'fsf_file')]),
+        (first_level_design, generate_model, [('ev_files', 'ev_files')]),
+
+        (fit_model, estimate_model, [('functional_data', 'in_file')]),
+        (generate_model, estimate_model, [('design_file', 'design_file')]),
+        (generate_model, estimate_model, [('con_file', 'tcon_file')]),
+
+        (bdg, produce_contrast_entities, [('func', 'func_file')]),
+        (get_info, produce_contrast_entities, [('run_contrasts', 'contrasts')]),
+
+        (produce_contrast_entities, ds_effects, [('contrast_entities', 'entities')]),
+        (produce_contrast_entities, ds_variances, [('contrast_entities', 'entities')]),
+        (produce_contrast_entities, ds_zstats, [('contrast_entities', 'entities')]),
+        (produce_contrast_entities, ds_tstats, [('contrast_entities', 'entities')]),
+        (produce_contrast_entities, ds_fstats, [('contrast_entities', 'entities')]),
+        (estimate_model, ds_effects, [('copes', 'in_file')]),
+        (estimate_model, ds_variances, [('varcopes', 'in_file')]),
+        (estimate_model, ds_zstats, [('zstats', 'in_file')]),
+        (estimate_model, ds_tstats, [('tstats', 'in_file')]),
+        (estimate_model, ds_fstats, [('fstats', 'in_file')]),
         #(estimate_model, 'dof_file', outputnode, 'dof'),
         #(exec_get_contrasts, 'contrasts', outputnode, 'contrasts')
     ])
 
     return workflow
 
-
+'''
 def fsl_session_level_wf(output_dir,
                          subject_id,
                          work_dir,
@@ -407,3 +377,4 @@ def fsl_session_level_wf(output_dir,
     workflow.connect(get_renames, 'new_names', sinkd, 'substitutions')
 
     return workflow
+'''

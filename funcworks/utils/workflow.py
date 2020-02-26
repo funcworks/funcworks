@@ -1,7 +1,7 @@
 """
 Helper functions for FSL workflows
 """
-#pylint: disable=C0415,R0913,R0914
+#pylint: disable=R0913,R0914
 #Run Level Functions
 def get_contrasts(step, include_contrasts):
     """
@@ -30,125 +30,36 @@ def get_contrasts(step, include_contrasts):
                                   include_contrasts,
                                   weight_vector))
         else:
-
             all_contrasts.append((contrast['Name'], contrast['Type'].upper(),
                                   contrast['ConditionList'],
                                   contrast['Weights']))
     return all_contrasts
 
-def get_info(confounds, events, confound_regressors, condition_names):
-    '''Grabs EV files for subject based on contrasts of interest'''
-    from nipype.interfaces.base import Bunch
-    import pandas as pd
-    import numpy as np
-    event_data = pd.read_csv(events, sep='\t')
-    conf_data = pd.read_csv(confounds, sep='\t')
-    conf_data = conf_data.fillna(0)
-    names = []
-    onsets = []
-    amplitudes = []
-    durations = []
-    regressor_names = []
-    regressors = []
-    for condition in condition_names:
-        try:
-            condition_column, condition_name = condition.split('.')
-        except ValueError:
-            print(('Name of Conditions must consist of a'
-                   'string of the format {column_name}.{trial_name}'
-                   f'but a value of "{condition}" was specified'))
-        condition_frame = event_data.query(f'{condition_column} == "{condition_name}"')
-        if len(condition_frame) > 0:
-            names.append(condition)
-            onsets.append(condition_frame['onset'].values)
-            durations.append(condition_frame['duration'].values)
-            amplitudes.append(np.ones(len(condition_frame)))
 
-    for confound in confound_regressors:
-        regressor_names.append(confound)
-        regressors.append(conf_data[confound].values)
-
-    output = Bunch(conditions=names,
-                   onsets=onsets,
-                   durations=durations,
-                   amplitudes=amplitudes,
-                   tmod=None,
-                   pmod=None,
-                   regressor_names=regressor_names,
-                   regressors=regressors)
-    return output, names
-
-def get_confounds(func):
-    #A workaround to a current issue in pybids
-    #that causes massive resource use when indexing derivative tsv files
-    import os.path as op
-    from bids.layout.writing import build_path
-    entities = {pair.split('-')[0]:pair.split('-')[1] \
-                for pair in op.basename(func).split('_') if '-' in pair}
-    entities['desc'] = 'confounds'
-    entities['suffix'] = 'regressors'
-    confounds_pattern = \
-    'sub-{sub}[_ses-{ses}]_task-{task}_run-{run}_desc-{desc}_{suffix}.tsv'
-    confound_file = op.join(op.dirname(func),
-                            build_path(entities, path_patterns=confounds_pattern))
-    return confound_file
-
-def get_metadata(func):
-    import os.path as op
-    import json
-    from bids.layout.writing import build_path
-    import nibabel as nb
-    num_timepoints = nb.load(func).get_data().shape[3]
-    entities = {pair.split('-')[0]:pair.split('-')[1] \
-                for pair in op.basename(func).split('_') if '-' in pair}
-    entities['desc'] = 'preproc'
-    entities['suffix'] = 'bold'
-    meta_pattern = \
-    'sub-{sub}[_ses-{ses}]_task-{task}_run-{run}[_space-{space}]_desc-{desc}_{suffix}.json'
-    meta_file = op.join(op.dirname(func),
-                        build_path(entities, path_patterns=meta_pattern))
-    with open(meta_file) as omf:
-        metadata = json.load(omf)
-
-    return metadata['RepetitionTime'], num_timepoints
-
-def get_motion_parameters(confounds):
-    import os #pylint: disable=W0621,W0404
-    import pandas as pd
-    motion_params = os.path.join(os.getcwd(),
-                                 os.path.basename(confounds).split('.')[0] + '_motparams.tsv')
-    confound_data = pd.read_csv(confounds, sep='\t')
-    #Motion data gets formatted FSL style, with x, y, z rotation, then x,y,z translation
-    motion_data = confound_data[['rot_x', 'rot_y', 'rot_z', 'trans_x', 'trans_y', 'trans_z']]
-    motion_data.to_csv(motion_params, sep='\t', header=None, index=None)
-    return motion_params
 
 def get_smoothing_info_fsl(func, brain_mask, mean_image):
     import nibabel as nb
     import numpy as np
     img = nb.load(func)
-    img_data = img.get_data()
-    mask_img_data = nb.load(brain_mask).get_data()
+    img_data = img.get_fdata()
+    mask_img_data = nb.load(brain_mask).get_fdata()
     img_median = np.median(img_data[mask_img_data > 0])
     btthresh = img_median * 0.75
     usans = [tuple([mean_image, btthresh])]
 
     return usans, btthresh
 
-def get_entities(func):
+def get_entities(func_file, contrasts):
     import os #pylint: disable=W0621,W0404
-    run_entities = []
-    for func_file in func:
-        stem = os.path.basename(func_file).split('.')[0]
-        entity_pairs = stem.split('_')
-        entities = {x.split('-')[0]:x.split('-')[1] if '-' in x else None for x in entity_pairs}
-        for item in entities:
-            if entities[item] is None:
-                entities['suffix'] = item
-                break
-        entities['subject'] = entities.pop('sub', None)
-        run_entities.append(entities)
-    return run_entities
+    contrast_entities = []
+    stem = os.path.basename(func_file).split('.')[0]
+    entity_pairs = stem.split('_')
+    entities = {x.split('-')[0]:x.split('-')[1] if '-' in x else None for x in entity_pairs}
+    contrast_names = [contrast[0] for contrast in contrasts]
+    for contrast_name in contrast_names:
+        entities.update({'contrast':contrast_name})
+        contrast_entities.append(entities)
+    return contrast_entities
 
 def snake_to_camel(string):
     string.replace('.', '_')
@@ -219,24 +130,19 @@ def rename_outputs(output_dir, contrasts, entities,
     dof = outputs['dof']
     return effects, variances, zstats, pstats, tstats, dof, fstats
 
-def reshape_ra(outlier_files, confounds, confound_regressors, num_timepoints):
+def reshape_ra(run_info, metadata, outlier_files):
     import os #pylint: disable=W0621,W0404
     import pandas as pd
     import numpy as np
-
-    art_dict = {}
-    outlier_frame = pd.read_csv(outlier_files, header=None)
-    confound_frame = pd.read_csv(confounds, sep='\t')
-    for i, row in outlier_frame.iterrows():
-        art_dict['rapidart' + str(i)] = np.zeros(num_timepoints)
-        art_dict['rapidart' + str(i)][row.values[0]] = 1
-        confound_regressors.append('rapidart' + str(i))
-    rapid_frame = pd.DataFrame(art_dict)
-    confound_frame = pd.concat([confound_frame, rapid_frame], axis=1)
-    confounds = os.path.join(os.getcwd(), os.path.basename(confounds).split('.')[0] + '_ra.tsv')
-    confound_frame.to_csv(confounds, sep='\t')
-
-    return confounds, confound_regressors
+    from nipype.interfaces.base import Bunch
+    run_dict = run_info.dictcopy()
+    outlier_frame = np.genfromtxt(outlier_files)
+    for value in outlier_frame:
+        ra_col = np.zeros(metadata['NumTimepoints'])
+        ra_col[value] = 1
+        run_dict['regressors'].append(ra_col)
+    run_info = Bunch(**run_dict)
+    return run_dict
 
 #Session Level Functions
 def num_copes(effects):
@@ -298,9 +204,9 @@ def merge_runs(effects, variances, dofs):
     import numpy as np
     import nibabel as nb
 
-    full_effects = np.concatenate([np.expand_dims(nb.load(x).get_data(), 3) \
+    full_effects = np.concatenate([np.expand_dims(nb.load(x).get_fdata(), 3) \
                                    for x in effects], axis=3)
-    full_variances = np.concatenate([np.expand_dims(nb.load(x).get_data(), 3) \
+    full_variances = np.concatenate([np.expand_dims(nb.load(x).get_fdata(), 3) \
                                      for x in variances], axis=3)
     full_dofs = np.ones_like(full_effects)
     full_dofs = np.concatenate([full_dofs[:, :, :, i] * np.loadtxt(file) \
@@ -334,8 +240,6 @@ def rename_contrasts(effects, variances, tstats, zstats, res4d):
     import os.path as op
     from bids.layout.writing import build_path
 
-    if not isinstance(merged_effects, list):
-        merged_effects = [merged_effects]
     if not isinstance(effects, list):
         effects = [effects]
     if not isinstance(variances, list):
@@ -347,9 +251,9 @@ def rename_contrasts(effects, variances, tstats, zstats, res4d):
     if not isinstance(res4d, list):
         res4d = [res4d]
     entities = {pair.split('-')[0]:pair.split('-')[1] \
-                for pair in op.basename(merged_effects[0]).split('_') if '-' in pair}
+                for pair in op.basename(effects[0]).split('_') if '-' in pair}
     new_names = []
-    for i in range(len(effects)):
+    for i, _ in enumerate(effects):
         new_names.append((op.basename(effects[i]),
                           build_path(entities,
                                      path_patterns=('sub-{sub}[_ses-{ses}]'

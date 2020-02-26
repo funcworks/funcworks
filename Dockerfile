@@ -41,6 +41,7 @@ RUN apt-get update -qq \
                                                      wget \
                                                      curl \
                                                      lsb-core \
+                                                     graphviz \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
@@ -61,21 +62,6 @@ RUN source $NVM_DIR/nvm.sh \
 # add node and npm to path so the commands are available
 ENV NODE_PATH $NVM_DIR/v$NODE_VERSION/lib/node_modules
 ENV PATH $NVM_DIR/versions/node/v$NODE_VERSION/bin:$PATH
-
-#------------------------
-# Install dcm2niix v1.0.20190410
-#------------------------
-WORKDIR /tmp
-RUN deps='cmake g++ gcc git make pigz zlib1g-dev' \
-    && apt-get update -qq && apt-get install -yq --no-install-recommends $deps \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
-    && mkdir dcm2niix \
-    && curl -sSL https://github.com/rordenlab/dcm2niix/tarball/v1.0.20190410 | tar xz -C dcm2niix --strip-components 1 \
-    && mkdir dcm2niix/build && cd dcm2niix/build \
-    && cmake .. && make \
-    && make install \
-    && rm -rf /tmp/*
 
 #------------------
 # Install Miniconda
@@ -180,9 +166,8 @@ RUN conda create -y -q --name neuro python=3 \
     && sync && conda clean -tipsy && sync \
     && /bin/bash -c "source activate neuro \
       && pip install git+git://github.com/FIU-Neuro/dcmstack \
-      && pip install numpy pandas pybids==0.9.4 nibabel pydicom python-dateutil niworkflows nipype==1.3.1 \
-      && pip install git+git://github.com/nipy/heudiconv@202f9434819318055e5293486f6bdac489989c52 \
-      && pip install git+git://github.com/adamkimbler/funcworks" \
+      && pip install numpy pandas pybids==0.9.4 nibabel pydicom python-dateutil niworkflows nipype==1.4.1 traits==5.2.0 \
+      && pip install git+git://github.com/nipy/heudiconv" \
     && sync \
     && sed -i '$isource activate neuro' $ND_ENTRYPOINT
 
@@ -202,28 +187,6 @@ RUN apt-get update -qq && apt-get install -yq --no-install-recommends dirmngr gn
     && (apt-key adv --refresh-keys --keyserver hkp://pool.sks-keyservers.net:80 0xA5D32F012649A5A9 || true) \
     && apt-get update
 
-#--------------------
-# Download mri_deface
-#--------------------
-# Download mri_deface nd additional files from MGH
-ENV DEFACE_DIR /src/deface
-RUN mkdir -p ${DEFACE_DIR}
-
-RUN wget -N -qO- -O ${DEFACE_DIR}/mri_deface.gz \
-  ftp://surfer.nmr.mgh.harvard.edu/pub/dist/mri_deface/mri_deface-v1.22-Linux64.gz && \
-  gunzip ${DEFACE_DIR}/mri_deface.gz && \
-  chmod +x ${DEFACE_DIR}/mri_deface
-
-RUN wget -N -qO- -O ${DEFACE_DIR}/face.gca.gz \
-  ftp://surfer.nmr.mgh.harvard.edu/pub/dist/mri_deface/face.gca.gz && \
-  gunzip ${DEFACE_DIR}/face.gca.gz
-
-RUN wget -N -qO- -O ${DEFACE_DIR}/talairach_mixed_with_skull.gca.gz \
-  ftp://surfer.nmr.mgh.harvard.edu/pub/dist/mri_deface/talairach_mixed_with_skull.gca.gz && \
-  gunzip ${DEFACE_DIR}/talairach_mixed_with_skull.gca.gz
-
-ENV PATH=$PATH:${DEFACE_DIR}
-
 # Create new user: neuro
 RUN useradd --no-user-group --create-home --shell /bin/bash neuro
 USER neuro
@@ -242,5 +205,8 @@ ENV SINGULARITY_TMPDIR /scratch
 COPY ./ /scripts/
 USER root
 RUN chmod 755 -R /scripts/
+RUN /bin/bash -c "source activate neuro \
+    && cd /scripts \
+    && python setup.py install"
 USER neuro
 ENTRYPOINT ["/neurodocker/startup.sh", "funcworks"]
