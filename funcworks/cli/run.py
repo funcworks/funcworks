@@ -1,5 +1,4 @@
 import os
-import re
 import gc
 import sys
 import uuid
@@ -7,6 +6,7 @@ import json
 import logging
 import warnings
 from pathlib import Path
+from tempfile import mkdtemp
 from time import strftime
 from multiprocessing import cpu_count
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
@@ -40,7 +40,7 @@ def get_parser():
                              'reports')
     parser.add_argument('analysis_level', choices=['run', 'session', 'participant', 'dataset'],
                         help='processing stage to be runa (see BIDS-Apps specification).')
-    parser.add_argument('-m', '--model', action='store', type=Path,
+    parser.add_argument('-m', '--model-file', action='store', type=Path,
                         help='location of BIDS model description')
     parser.add_argument('-d', '--derivatives', action='store', nargs='+',
                         help='location of derivatives (including preprocessed images).'
@@ -55,13 +55,16 @@ def get_parser():
                              "(e.g., `l1`) or by name (`run`, `subject`, `session` or `dataset`). "
                              "Optional smoothing TYPE (default: iso) must be one of: `iso` (isotropic). "
                              "e.g., `--smoothing 5:dataset:iso` will perform a 5mm FWHM isotropic "
-                             "smoothing on subject-level maps, before evaluating the dataset level.")
+                             "smoothing on subject-level maps before evaluating the dataset level.")
     parser.add_argument('-w', '--work_dir', action='store', type=Path,
+                        default=mkdtemp(),
                         help='path where intermediate results should be stored')
     parser.add_argument('--use-rapidart', action='store_true', default=False,
                         help='Use RapidArt artifact detection algorithm')
     parser.add_argument('--use-plugin', action='store', default=None,
                         help='nipype plugin configuration file')
+    parser.add_argument('--detrend-poly', action='store', default=None, type=int,
+                        help='Legendre polynomials to use for temporal filtering')
     return parser
 
 def main():
@@ -116,6 +119,7 @@ def main():
     gc.collect()
 
     errno = 1  # Default is error exit unless otherwise set
+    funcworks_wf.write_graph(graph2use="colored", format='png')
     try:
         funcworks_wf.run(**plugin_settings)
     except Exception as e:
@@ -145,7 +149,6 @@ def build_workflow(opts, retval):
     from bids import BIDSLayout
 
     from nipype import logging as nlogging, config as ncfg
-    from niworkflows.reports import generate_reports
     #from ..__about__ import __version__
     from ..workflows.base import init_funcworks_wf
     __version__ = '0.0.1'
@@ -157,15 +160,14 @@ def build_workflow(opts, retval):
       * Participant list: {participant_label}.
       * Run identifier: {uuid}.
     """.format
-
-    bids_dir = opts.bids_dir.resolve()
     output_dir = opts.output_dir.resolve()
+    bids_dir = opts.bids_dir.resolve()
     work_dir = opts.work_dir.resolve()
     retval['return_code'] = 1
     retval['workflow'] = None
-    retval['bids_dir'] = str(bids_dir)
-    retval['output_dir'] = str(output_dir)
-    retval['work_dir'] = str(work_dir)
+    retval['bids_dir'] = bids_dir
+    retval['output_dir'] = output_dir
+    retval['work_dir'] = work_dir
 
     if output_dir == bids_dir:
         build_log.error(
@@ -175,7 +177,7 @@ def build_workflow(opts, retval):
         retval['return_code'] = 1
         return retval
 
-    if bids_dir in work_dir.parents:
+    if bids_dir in opts.work_dir.parents:
         build_log.error(
             'The selected working directory is a subdirectory of the input BIDS folder. '
             'Please modify the output path.')
@@ -230,7 +232,7 @@ def build_workflow(opts, retval):
     retval['plugin_settings'] = plugin_settings
 
     # Set up directories
-    log_dir = output_dir / 'funcworks' / 'logs'
+    log_dir = output_dir / 'logs'
     # Check and create output and working directories
     output_dir.mkdir(exist_ok=True, parents=True)
     log_dir.mkdir(exist_ok=True, parents=True)
@@ -275,7 +277,7 @@ def build_workflow(opts, retval):
                                participant_label=opts.participant_label,
                                uuid=run_uuid))
 
-    retval['workflow'] = init_funcworks_wf(model=opts.model,
+    retval['workflow'] = init_funcworks_wf(model_file=opts.model_file,
                                            bids_dir=opts.bids_dir,
                                            output_dir=opts.output_dir,
                                            work_dir=opts.work_dir,
@@ -284,10 +286,11 @@ def build_workflow(opts, retval):
                                            smoothing=opts.smoothing,
                                            derivatives=opts.derivatives,
                                            run_uuid=run_uuid,
-                                           use_rapidart=opts.use_rapidart)
+                                           use_rapidart=opts.use_rapidart,
+                                           detrend_poly=opts.detrend_poly)
     retval['return_code'] = 0
 
-    logs_path = Path(output_dir) / 'funcworks' / 'logs'
+    logs_path = Path(output_dir) / 'logs'
     boilerplate = retval['workflow'].visit_desc()
 
     if boilerplate:
