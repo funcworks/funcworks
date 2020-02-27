@@ -1,10 +1,10 @@
-import os
+#pylint: disable=R0913,R0914,C0114,C0116
 import json
 from pathlib import Path
 from copy import deepcopy
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
+from .. import __version__
 from .fsl import fsl_first_level_wf#, fsl_session_level_wf
-#pylint: disable=R0913,R0914
 def init_funcworks_wf(model_file,
                       bids_dir,
                       output_dir,
@@ -16,8 +16,9 @@ def init_funcworks_wf(model_file,
                       run_uuid,
                       use_rapidart,
                       detrend_poly):
+
     with open(model_file, 'r') as read_mdl:
-        model_dict = json.load(read_mdl)
+        model = json.load(read_mdl)
 
     funcworks_wf = Workflow(name='funcworks_wf')
     funcworks_wf.base_dir = str(work_dir)
@@ -31,7 +32,7 @@ def init_funcworks_wf(model_file,
         smoothing_fwhm = float(smoothing_fwhm)
 
         if smoothing_level.lower().startswith("l"):
-            if int(smoothing_level[1:]) > len(model_dict['Steps']):
+            if int(smoothing_level[1:]) > len(model['Steps']):
                 raise ValueError(f"Invalid smoothing level {smoothing_level}")
     else:
         smoothing_fwhm = None
@@ -39,9 +40,9 @@ def init_funcworks_wf(model_file,
         smoothing_type = None
 
     for subject_id in participants:
-        single_subject_wf = init_funcworks_subject_wf(model=model_dict,
+        single_subject_wf = init_funcworks_subject_wf(model=model,
                                                       bids_dir=bids_dir,
-                                                      output_dir=output_dir,
+                                                      output_dir=output_dir / 'funcworks' / model['Name'],
                                                       work_dir=work_dir,
                                                       subject_id=subject_id,
                                                       analysis_level=analysis_level,
@@ -52,7 +53,7 @@ def init_funcworks_wf(model_file,
                                                       use_rapidart=use_rapidart,
                                                       detrend_poly=detrend_poly,
                                                       name=f'single_subject_{subject_id}_wf')
-        crash_dir = Path(output_dir) / 'logs' / f'sub-{subject_id}' / run_uuid
+        crash_dir = Path(output_dir) / 'logs' / model['Name'] / f'sub-{subject_id}' / run_uuid
         crash_dir.mkdir(exist_ok=True, parents=True)
 
         single_subject_wf.config['execution']['crashdump_dir'] = crash_dir

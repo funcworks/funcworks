@@ -1,4 +1,4 @@
-import os
+# pylint: disable=R0915,R0914,R0913,C0114
 from pathlib import Path
 from nipype.pipeline import engine as pe
 from nipype.interfaces import fsl, io
@@ -7,7 +7,7 @@ from nipype.algorithms import modelgen, rapidart as ra
 from ..interfaces.bids import (BIDSDataSink)
 from ..interfaces.io import GetModelInfo
 from .. import utils
-# pylint: disable=R0915,R0914,R0913
+
 def fsl_first_level_wf(model,
                        step,
                        bids_dir,
@@ -46,6 +46,7 @@ def fsl_first_level_wf(model,
         fixed_entities['space'] = None
 
     workflow.__desc__ = ""
+    (work_dir / model['Name']).mkdir(exist_ok=True)
     workflow.base_dir = work_dir / model['Name']
 
     bdg = pe.Node(

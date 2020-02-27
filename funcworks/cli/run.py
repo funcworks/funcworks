@@ -1,3 +1,4 @@
+#pylint: disable=C0103,R0913,R0914,W0404,C0114,C0116
 import os
 import gc
 import sys
@@ -10,7 +11,6 @@ from tempfile import mkdtemp
 from time import strftime
 from multiprocessing import cpu_count
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
-#pylint: disable=C0103,R0913,R0914,W0404
 
 logging.addLevelName(25, 'IMPORTANT')  # Add a new level between INFO and WARNING
 logging.addLevelName(15, 'VERBOSE')  # Add a new level between INFO and DEBUG
@@ -53,7 +53,8 @@ def get_parser():
                         help="Smooth BOLD series with FWHM mm kernel prior to fitting at LEVEL. "
                              "Optional analysis LEVEL (default: l1) may be specified numerically "
                              "(e.g., `l1`) or by name (`run`, `subject`, `session` or `dataset`). "
-                             "Optional smoothing TYPE (default: iso) must be one of: `iso` (isotropic). "
+                             "Optional smoothing TYPE (default: iso) must be one of:"
+                             "`iso` (isotropic). "
                              "e.g., `--smoothing 5:dataset:iso` will perform a 5mm FWHM isotropic "
                              "smoothing on subject-level maps before evaluating the dataset level.")
     parser.add_argument('-w', '--work_dir', action='store', type=Path,
@@ -152,7 +153,7 @@ def build_workflow(opts, retval):
     #from ..__about__ import __version__
     from ..workflows.base import init_funcworks_wf
     from .. import __version__
-    
+
     build_log = nlogging.getLogger('nipype.workflow')
 
     INIT_MSG = """
@@ -263,7 +264,8 @@ def build_workflow(opts, retval):
 
     # Called with reports only
     #if opts.reports_only:
-    #    build_log.log(25, 'Running --reports-only on participants %s', ', '.join(opts.participant_label))
+    #    build_log.log(25, 'Running --reports-only on participants %s',
+    #                  ', '.join(opts.participant_label))
     #    if opts.run_uuid is not None:
     #        run_uuid = opts.run_uuid
     #        retval['run_uuid'] = run_uuid
@@ -291,7 +293,7 @@ def build_workflow(opts, retval):
                                            detrend_poly=opts.detrend_poly)
     retval['return_code'] = 0
 
-    logs_path = Path(output_dir) / 'logs'
+    logs_path = Path(output_dir) / 'funcworks' / 'logs'
     boilerplate = retval['workflow'].visit_desc()
 
     if boilerplate:
