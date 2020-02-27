@@ -151,7 +151,8 @@ def build_workflow(opts, retval):
     from nipype import logging as nlogging, config as ncfg
     #from ..__about__ import __version__
     from ..workflows.base import init_funcworks_wf
-    __version__ = '0.0.1'
+    from .. import __version__
+    
     build_log = nlogging.getLogger('nipype.workflow')
 
     INIT_MSG = """
