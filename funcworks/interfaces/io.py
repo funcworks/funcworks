@@ -1,3 +1,4 @@
+# pylint: disable=C0415
 import os
 import shutil
 from nipype.interfaces.base import (
@@ -22,6 +23,7 @@ class GetModelInfoOutputSpec(TraitedSpec):
     confound_regressors = traits.List(desc='List of confound_regressors included in Run Model')
     run_metadata = traits.Dict(desc='Metadata for current run')
     run_contrasts = traits.List(desc='List of tuples describing each contrasts')
+    run_entities = traits.Dict(desc='Run specific BIDS Entities')
     motion_parameters = OutputMultiPath(File(exists=True),
                                         desc='File containing first six motion regressors')
     repetition_time = traits.Float(desc='Repetition Time for the dataset')
@@ -35,7 +37,7 @@ class GetModelInfo(IOBase):
 
     def _list_outputs(self):
         import json
-        regressors_file, meta_file = self._get_required_files()
+        regressors_file, meta_file, entities = self._get_required_files()
 
         motion_params = self._get_motion_parameters(regressors_file=regressors_file)
 
@@ -67,25 +69,26 @@ class GetModelInfo(IOBase):
                 'run_metadata': metadata,
                 'run_contrasts': run_conts,
                 'motion_parameters': motion_params,
-                'repetition_time': metadata['RepetitionTime']}
+                'repetition_time': metadata['RepetitionTime'],
+                'run_entities': entities}
 
     def _get_required_files(self):
         #A workaround to a current issue in pybids
         #that causes massive resource use when indexing derivative tsv files
         import os.path as op
+        from bids.layout import parse_file_entities
         from bids.layout.writing import build_path
         func = self.inputs.functional_file
-        entities = {pair.split('-')[0]:pair.split('-')[1] \
-                    for pair in op.basename(func).split('_') if '-' in pair}
+        entities = parse_file_entities(func)
         confounds_pattern = \
-        'sub-{sub}[_ses-{ses}]_task-{task}_run-{run}_desc-confounds_regressors.tsv'
+        'sub-{subject}[_ses-{session}]_task-{task}_run-{run}_desc-confounds_regressors.tsv'
         meta_pattern = \
-        'sub-{sub}[_ses-{ses}]_task-{task}_run-{run}[_space-{space}]_desc-preproc_bold.json'
+        'sub-{subject}[_ses-{session}]_task-{task}_run-{run}[_space-{space}]_desc-preproc_bold.json'
         regressors_file = op.join(op.dirname(func),
                                   build_path(entities, path_patterns=confounds_pattern))
         meta_file = op.join(op.dirname(func),
                             build_path(entities, path_patterns=meta_pattern))
-        return regressors_file, meta_file
+        return regressors_file, meta_file, entities
 
     @staticmethod
     def _get_model_info(regressors_file, events_file, confound_names, event_names):

@@ -1,5 +1,6 @@
 import os
 import shutil
+from pathlib import Path
 from gzip import GzipFile
 from nipype.utils.filemanip import copyfile
 from nipype.interfaces.base import (
@@ -34,8 +35,9 @@ def bids_split_filename(fname):
         ".nii.gz", ".tsv.gz",
         ]
 
-    pth = os.path.dirname(fname)
-    fname = os.path.basename(fname)
+    fname = Path(fname)
+    pth = fname.parent
+    fname = fname.name
 
     for special_ext in special_extensions:
         if fname.lower().endswith(special_ext.lower()):
@@ -77,12 +79,10 @@ class BIDSDataSink(IOBase):
     _always_run = True
 
     def _list_outputs(self):
-        from bids.layout import BIDSLayout
-        base_dir = self.inputs.base_directory
+        from bids.layout.writing import build_path
+        base_dir = Path(self.inputs.base_directory)
+        base_dir.mkdir(exist_ok=True, parents=True)
 
-        os.makedirs(base_dir, exist_ok=True)
-
-        layout = BIDSLayout(base_dir, validate=False)
         path_patterns = self.inputs.path_patterns
         if not isdefined(path_patterns):
             path_patterns = None
@@ -95,10 +95,8 @@ class BIDSDataSink(IOBase):
 
             ents = {k: snake_to_camel(str(v)) for k, v in ents.items()}
 
-            out_fname = os.path.join(
-                base_dir, layout.build_path(
-                    ents, path_patterns))
-            os.makedirs(os.path.dirname(out_fname), exist_ok=True)
+            out_fname = base_dir / build_path(ents, path_patterns)
+            out_fname.parent.mkdir(exist_ok=True, parents=True)
 
             _copy_or_convert(in_file, out_fname)
             out_files.append(out_fname)
