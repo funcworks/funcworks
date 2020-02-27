@@ -14,7 +14,8 @@ def init_funcworks_wf(model_file,
                       smoothing,
                       derivatives,
                       run_uuid,
-                      use_rapidart):
+                      use_rapidart,
+                      detrend_poly):
     with open(model_file, 'r') as read_mdl:
         model_dict = json.load(read_mdl)
 
@@ -49,6 +50,7 @@ def init_funcworks_wf(model_file,
                                                       smoothing_type=smoothing_type,
                                                       derivatives=derivatives,
                                                       use_rapidart=use_rapidart,
+                                                      detrend_poly=detrend_poly,
                                                       name=f'single_subject_{subject_id}_wf')
         crash_dir = Path(output_dir) / 'logs' / f'sub-{subject_id}' / run_uuid
         crash_dir.mkdir(exist_ok=True, parents=True)
@@ -73,6 +75,7 @@ def init_funcworks_subject_wf(model,
                               smoothing_type,
                               derivatives,
                               use_rapidart,
+                              detrend_poly,
                               name):
 
     funcworks_single_subject_wf = Workflow(name=name)
@@ -90,7 +93,8 @@ def init_funcworks_subject_wf(model,
                                            smoothing_level=smoothing_level,
                                            smoothing_type=smoothing_type,
                                            derivatives=derivatives,
-                                           use_rapidart=use_rapidart)
+                                           use_rapidart=use_rapidart,
+                                           detrend_poly=detrend_poly)
             funcworks_single_subject_wf.add_nodes([run_model])
 
 

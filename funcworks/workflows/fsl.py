@@ -19,13 +19,14 @@ def fsl_first_level_wf(model,
                        smoothing_level=None,
                        smoothing_type=None,
                        use_rapidart=False,
+                       detrend_poly=None,
                        name='fsl_first_level_wf'):
     """
     This workflow generates processes function data with information given in
     the model file
 
     """
-    # # TODO:  Implement design matrix parser to produce figures and retrieve matrix
+    #TODO:  Implement design matrix parser to produce figures and retrieve matrix
     #design_matrix_pattern = \
     #('[sub-{subject}/][ses-{session}/]'
     # '[sub-{subject}_][ses-{session}_]task-{task}[_acq-{acquisition}]'
@@ -64,7 +65,7 @@ def fsl_first_level_wf(model,
         name='bdg')
 
     get_info = pe.MapNode(
-        GetModelInfo(model=step),
+        GetModelInfo(model=step, detrend_poly=detrend_poly),
         iterfield=['functional_file', 'events_file'],
         name='get_info')
 
@@ -111,16 +112,15 @@ def fsl_first_level_wf(model,
         iterfield=['design_file', 'in_file', 'tcon_file'],
         name='estimate_model')
 
-    image_pattern = ('[sub-{subject}/][ses-{ses}/]'
-                     '[sub-{subject}_][ses-{ses}_]task-{task}[_acq-{acquisition}]'
-                     '[_rec-{reconstruction}][_run-{run}][_echo-{echo}][_space-{space}]'
+    image_pattern = ('[sub-{subject}/][ses-{session}/]'
+                     '[sub-{subject}_][ses-{session}_]task-{task}[_acq-{acquisition}]'
+                     '[_rec-{reconstruction}][_run-{run:02d}][_echo-{echo}][_space-{space}]'
                      '_contrast-{contrast}_stat-{stat<effect|variance|z|p|t|F>}_{suffix}.nii.gz')
 
-    #TODO: Modify get_entities to function as a producer of contrast specific entities
     produce_contrast_entities = pe.MapNode(
-        Function(input_names=['func', 'contrasts'], output_names='contrast_entities',
+        Function(input_names=['func_file', 'contrasts'], output_names='contrast_entities',
                  function=utils.get_entities),
-        iterfield=['func', 'contrasts'],
+        iterfield=['func_file', 'contrasts'],
         name='produce_contrast_entities')
 
     ds_effects = pe.MapNode(
@@ -166,7 +166,7 @@ def fsl_first_level_wf(model,
 
     reshape_rapidart = pe.MapNode(
         Function(input_names=['run_info', 'metadata', 'outlier_files'],
-                 output_names=['confounds', 'confound_regressors'],
+                 output_names=['run_info'],
                  function=utils.reshape_ra),
         iterfield=['outlier_files', 'run_info', 'metadata'],
         name='reshape_rapidart')

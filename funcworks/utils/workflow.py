@@ -51,14 +51,13 @@ def get_smoothing_info_fsl(func, brain_mask, mean_image):
 
 def get_entities(func_file, contrasts):
     import os #pylint: disable=W0621,W0404
+    from bids.layout import parse_file_entities
     contrast_entities = []
-    stem = os.path.basename(func_file).split('.')[0]
-    entity_pairs = stem.split('_')
-    entities = {x.split('-')[0]:x.split('-')[1] if '-' in x else None for x in entity_pairs}
+    entities = parse_file_entities(func_file)
     contrast_names = [contrast[0] for contrast in contrasts]
     for contrast_name in contrast_names:
         entities.update({'contrast':contrast_name})
-        contrast_entities.append(entities)
+        contrast_entities.append(entities.copy())
     return contrast_entities
 
 def snake_to_camel(string):
@@ -79,21 +78,21 @@ def rename_outputs(output_dir, contrasts, entities,
                      z=zstats,
                      t=tstats,
                      F=fstats)
-    dof_pattern = ('[sub-{subject}/][ses-{ses}/]sub-{subject}'
-                   '[_ses-{ses}]_task-{task}[_acq-{acquisition}][_rec-{reconstruction}]'
+    dof_pattern = ('[sub-{subject}/][ses-{session}/]sub-{subject}'
+                   '[_ses-{session}]_task-{task}[_acq-{acquisition}][_rec-{reconstruction}]'
                    '[_run-{run}][_echo-{echo}][_space-{space}]_contrast-{contrast}_dof.tsv')
-    contrast_pattern = ('[sub-{subject}/][ses-{ses}/]' \
-                       '[sub-{subject}_][ses-{ses}_]task-{task}[_acq-{acquisition}]'
+    contrast_pattern = ('[sub-{subject}/][ses-{session}/]' \
+                       '[sub-{subject}_][ses-{session}_]task-{task}[_acq-{acquisition}]'
                        '[_rec-{reconstruction}][_run-{run}][_echo-{echo}][_space-{space}]_'
                        'contrast-{contrast}_stat-{stat<effect|variance|z|p|t|F>}_statmap.nii.gz')
 
     output_path = os.path.join(output_dir, 'run_level')
     os.makedirs(output_path, exist_ok=True)
     os.makedirs(os.path.join(output_path, 'sub-' + entities["subject"]), exist_ok=True)
-    if 'ses' in entities:
+    if 'session' in entities:
         os.makedirs(os.path.join(output_path,
                                  'sub-' + entities["subject"],
-                                 'ses-' + entities["ses"]),
+                                 'ses-' + entities["session"]),
                     exist_ok=True)
     outputs = {'p':[], 'dof':[]}
     contrast_names = [x[0] for x in contrasts]
@@ -102,15 +101,15 @@ def rename_outputs(output_dir, contrasts, entities,
         if not file_list:
             continue
         for idx, file in enumerate(file_list):
-            entities['contrast'] = snake_to_camel(contrast_names[idx])
-            entities['stat'] = stat
+            entities.update({'contrast': snake_to_camel(contrast_names[idx]),
+                             'stat': stat})
             dest_path = os.path.join(output_path,
                                      build_path(entities, contrast_pattern))
             #os.makedirs(os.path.dirname(dest_path), exist_ok=True)
             shutil.copy(file, dest_path)
             outputs[stat].append(dest_path)
             if stat == 'z':
-                entities['stat'] = 'p'
+                entities.update({'stat': 'p'})
                 dest_path = os.path.join(output_path,
                                          build_path(entities, contrast_pattern))
                 outputs['p'].append(dest_path)
@@ -136,13 +135,14 @@ def reshape_ra(run_info, metadata, outlier_files):
     import numpy as np
     from nipype.interfaces.base import Bunch
     run_dict = run_info.dictcopy()
-    outlier_frame = np.genfromtxt(outlier_files)
-    for value in outlier_frame:
+    outlier_frame = np.genfromtxt(outlier_files, dtype=int)
+    for i, value in enumerate(outlier_frame):
+        run_dict['regressor_names'].append(f'rapidart{i:02d}')
         ra_col = np.zeros(metadata['NumTimepoints'])
         ra_col[value] = 1
         run_dict['regressors'].append(ra_col)
     run_info = Bunch(**run_dict)
-    return run_dict
+    return run_info
 
 #Session Level Functions
 def num_copes(effects):
@@ -158,23 +158,23 @@ def get_brainmask(subject_id, derivatives):
 def return_contrasts(subject_id, derivatives):
     import os.path as op
     from bids.layout.writing import build_path
+    from bids.layout import parse_file_entities
     from glob import glob
     contrasts = []
 
     run_level_dir = op.join(derivatives.replace('fmriprep', 'funcworks'), 'run_level')
-    base_pattern = ('sub-{sub}[/ses-{ses}]/sub-{sub}[_ses-{ses}]'
+    base_pattern = ('sub-{subject}[/ses-{session}]/sub-{subject}[_ses-{session}]'
                     '_task-{task}_run-??_contrast-{contrast}[_space-{space}]')
     for file in glob((f'{run_level_dir}/sub-{subject_id}/'
                       f'sub-{subject_id}_task-study_run-0?_*_contrast-*.nii.gz')):
-        entities = {pair.split('-')[0]:pair.split('-')[1] \
-                    for pair in op.basename(file).split('_') if '-' in pair}
+        entities = parse_file_entities(file)
         if entities['contrast'] not in contrasts:
             contrasts.append(entities['contrast'])
     contrast_dof = {}
     contrast_file = {}
     contrast_variances = {}
     for contrast in contrasts:
-        entities['contrast'] = contrast
+        entities.update({'contrast':contrast})
         cope_path = op.join(run_level_dir,
                             build_path(entities,
                                        path_patterns=(base_pattern +
@@ -203,7 +203,7 @@ def merge_runs(effects, variances, dofs):
     from bids.layout.writing import build_path
     import numpy as np
     import nibabel as nb
-
+    from bids.layout import parse_file_entities
     full_effects = np.concatenate([np.expand_dims(nb.load(x).get_fdata(), 3) \
                                    for x in effects], axis=3)
     full_variances = np.concatenate([np.expand_dims(nb.load(x).get_fdata(), 3) \
@@ -212,24 +212,23 @@ def merge_runs(effects, variances, dofs):
     full_dofs = np.concatenate([full_dofs[:, :, :, i] * np.loadtxt(file) \
                                 for i, file in enumerate(dofs)])
     affine = nb.load(effects[0]).affine
-    entities = {pair.split('-')[0]:pair.split('-')[1] \
-                for pair in os.path.basename(effects[0]).split('_') if '-' in pair}
+    entities = parse_file_entities(effects[0])
 
     effects_path = op.join(os.getcwd(),
                            build_path(entities,
-                                      path_patterns=('sub-{sub}[_ses-{ses}]'
+                                      path_patterns=('sub-{subject}[_ses-{session}]'
                                                      '_task-{task}_contrast-{contrast}'
                                                      '_stat-effects_merged.nii.gz')))
     nb.save(nb.nifti1.Nifti1Image(full_variances, affine), effects_path)
     variances_path = op.join(os.getcwd(),
                              build_path(entities,
-                                        path_patterns=('sub-{sub}[_ses-{ses}]'
+                                        path_patterns=('sub-{subject}[_ses-{session}]'
                                                        '_task-{task}_contrast-{contrast}'
                                                        '_stat-variances_merged.nii.gz')))
     nb.save(nb.nifti1.Nifti1Image(full_variances, affine), variances_path)
     dofs_path = op.join(os.getcwd(),
                         build_path(entities,
-                                   path_patterns=('sub-{sub}[_ses-{ses}]'
+                                   path_patterns=('sub-{subject}[_ses-{session}]'
                                                   '_task-{task}_contrast-{contrast}'
                                                   '_stat-dof_merged.nii.gz')))
     nb.save(nb.nifti1.Nifti1Image(full_dofs, affine), dofs_path)
@@ -239,6 +238,7 @@ def merge_runs(effects, variances, dofs):
 def rename_contrasts(effects, variances, tstats, zstats, res4d):
     import os.path as op
     from bids.layout.writing import build_path
+    from bids.layout import parse_file_entities
 
     if not isinstance(effects, list):
         effects = [effects]
@@ -250,33 +250,33 @@ def rename_contrasts(effects, variances, tstats, zstats, res4d):
         zstats = [zstats]
     if not isinstance(res4d, list):
         res4d = [res4d]
-    entities = {pair.split('-')[0]:pair.split('-')[1] \
-                for pair in op.basename(effects[0]).split('_') if '-' in pair}
+
+    entities = parse_file_entities(effects[0])
     new_names = []
     for i, _ in enumerate(effects):
         new_names.append((op.basename(effects[i]),
                           build_path(entities,
-                                     path_patterns=('sub-{sub}[_ses-{ses}]'
+                                     path_patterns=('sub-{subject}[_ses-{sesion}]'
                                                     '_task-{task}_contrast-{contrast}'
                                                     '_stat-effects_statmap.nii.gz'))))
         new_names.append((op.basename(variances[i]),
                           build_path(entities,
-                                     path_patterns=('sub-{sub}[_ses-{ses}]'
+                                     path_patterns=('sub-{subject}[_ses-{session}]'
                                                     '_task-{task}_contrast-{contrast}'
                                                     '_stat-variances_statmap.nii.gz'))))
         new_names.append((op.basename(tstats[i]),
                           build_path(entities,
-                                     path_patterns=('sub-{sub}[_ses-{ses}]'
+                                     path_patterns=('sub-{subject}[_ses-{session}]'
                                                     '_task-{task}_contrast-{contrast}'
                                                     '_stat-t_statmap.nii.gz'))))
         new_names.append((op.basename(zstats[i]),
                           build_path(entities,
-                                     path_patterns=('sub-{sub}[_ses-{ses}]'
+                                     path_patterns=('sub-{subject}[_ses-{session}]'
                                                     '_task-{task}_contrast-{contrast}'
                                                     '_stat-z_statmap.nii.gz'))))
         new_names.append((op.basename(res4d[i]),
                           build_path(entities,
-                                     path_patterns=('sub-{sub}[_ses-{ses}]'
+                                     path_patterns=('sub-{subject}[_ses-{session}]'
                                                     '_task-{task}_contrast-{contrast}'
                                                     '_stat-residuals_statmap.nii.gz'))))
     return new_names

@@ -63,6 +63,8 @@ def get_parser():
                         help='Use RapidArt artifact detection algorithm')
     parser.add_argument('--use-plugin', action='store', default=None,
                         help='nipype plugin configuration file')
+    parser.add_argument('--detrend-poly', action='store', default=None, type=int,
+                        help='Legendre polynomials to use for temporal filtering')
     return parser
 
 def main():
@@ -284,7 +286,8 @@ def build_workflow(opts, retval):
                                            smoothing=opts.smoothing,
                                            derivatives=opts.derivatives,
                                            run_uuid=run_uuid,
-                                           use_rapidart=opts.use_rapidart)
+                                           use_rapidart=opts.use_rapidart,
+                                           detrend_poly=opts.detrend_poly)
     retval['return_code'] = 0
 
     logs_path = Path(output_dir) / 'logs'

@@ -12,7 +12,9 @@ class GetModelInfoInputSpec(BaseInterfaceInputSpec):
     functional_file = File(exists=True, mandatory=True)
     events_file = File(exists=True, mandatory=False)
     model = traits.Dict(mandatory=True)
-
+    detrend_poly = traits.Any(default=None,
+                              desc=('Legendre polynomials to regress out'
+                                    'for temporal filtering'))
 
 class GetModelInfoOutputSpec(TraitedSpec):
     run_info = traits.Any(desc='Model Info required to construct Run Level Model')
@@ -51,6 +53,13 @@ class GetModelInfo(IOBase):
                                  event_names=event_names)
         run_conts = self._get_contrasts(model=level_model,
                                         event_names=event_regs)
+
+        detrend_poly = self.inputs.detrend_poly
+        if detrend_poly:
+            polynomial_names, polynomial_arrays = \
+                self._detrend_polynomial(regressors_file, detrend_poly)
+            run_info.regressor_names.extend(polynomial_names) #pylint: disable=E1101
+            run_info.regressors.extend(polynomial_arrays) #pylint: disable=E1101
 
         return {'run_info' : run_info,
                 'event_regressors': event_regs,
@@ -166,3 +175,19 @@ class GetModelInfo(IOBase):
         motion_data.to_csv(motion_params_path, sep='\t', header=None, index=None)
         motion_params = motion_params_path
         return motion_params
+
+    @staticmethod
+    def _detrend_polynomial(regressors_file, detrend_poly=None):
+        import numpy as np
+        import pandas as pd
+        from scipy.special import legendre
+
+        regressors_frame = pd.read_csv(regressors_file)
+
+        poly_names = []
+        poly_arrays = []
+        for i in range(0, detrend_poly + 1):
+            poly_names.append(f'legendre{i:02d}')
+            poly_arrays.append(legendre(i)(np.linspace(-1, 1, len(regressors_frame))))
+
+        return poly_names, poly_arrays
