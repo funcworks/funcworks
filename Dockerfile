@@ -134,7 +134,7 @@ RUN conda create -y -q --name neuro python=3 \
     && sync && conda clean -tipsy && sync \
     && /bin/bash -c "source activate neuro \
       && pip install git+git://github.com/FIU-Neuro/dcmstack \
-      && pip install numpy pandas pybids==0.9.4 nibabel pydicom python-dateutil niworkflows nipype==1.4.1 traits==5.2.0 \
+      && pip install numpy pandas pybids==0.10.1 nibabel pydicom python-dateutil niworkflows nipype==1.4.2 traits==5.2.0 \
       && pip install git+git://github.com/nipy/heudiconv" \
     && sync \
     && sed -i '$isource activate neuro' $ND_ENTRYPOINT
