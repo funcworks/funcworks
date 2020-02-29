@@ -1,10 +1,14 @@
+"""
+General BIDS interfaces
+"""
+#pylint: disable=W0703,C0115
 import os
 import shutil
 from pathlib import Path
 from gzip import GzipFile
 from nipype.utils.filemanip import copyfile
 from nipype.interfaces.base import (
-    BaseInterfaceInputSpec, TraitedSpec, SimpleInterface,
+    BaseInterfaceInputSpec, TraitedSpec,
     InputMultiPath, OutputMultiPath, File, Directory,
     traits, isdefined
     )

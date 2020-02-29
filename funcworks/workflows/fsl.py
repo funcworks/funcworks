@@ -1,4 +1,7 @@
-# pylint: disable=R0915,R0914,R0913,C0114
+"""
+Run and Session Level WFs in FSL
+"""
+#pylint: disable=R0913,R0914
 from pathlib import Path
 from nipype.pipeline import engine as pe
 from nipype.interfaces import fsl, io
@@ -6,6 +9,7 @@ from nipype.interfaces.utility import Function, IdentityInterface
 from nipype.algorithms import modelgen, rapidart as ra
 from ..interfaces.bids import (BIDSDataSink)
 from ..interfaces.io import GetModelInfo
+from ..interfaces.visualization import PlotMatrices
 from .. import utils
 
 def fsl_first_level_wf(model,
@@ -26,11 +30,6 @@ def fsl_first_level_wf(model,
     the model file
 
     """
-    #TODO:  Implement design matrix parser to produce figures and retrieve matrix
-    #design_matrix_pattern = \
-    #('[sub-{subject}/][ses-{session}/]'
-    # '[sub-{subject}_][ses-{session}_]task-{task}[_acq-{acquisition}]'
-    # '[_rec-{reconstruction}][_run-{run}][_echo-{echo}]_{suffix<design>}.tsv')
 
     bids_dir = Path(bids_dir)
     work_dir = Path(work_dir)
@@ -47,7 +46,6 @@ def fsl_first_level_wf(model,
 
     workflow.__desc__ = ""
     (work_dir / model['Name']).mkdir(exist_ok=True)
-    workflow.base_dir = work_dir / model['Name']
 
     bdg = pe.Node(
         io.BIDSDataGrabber(base_dir=bids_dir, subject=subject_id,
@@ -55,9 +53,10 @@ def fsl_first_level_wf(model,
                            output_query={'func': {**{'datatype':'func', 'desc':'preproc',
                                                      'extension':'nii.gz', 'suffix':'bold'},
                                                   **fixed_entities},
-                                         'events': {**{'datatype':'func', 'suffix':'events',
-                                                       'extension':'tsv'},
-                                                    **fixed_entities},
+                                         'events': {'datatype':'func', 'suffix':'events',
+                                                    'extension':'tsv',
+                                                    'task':fixed_entities['task'],
+                                                    'run':fixed_entities['run']},
                                          'brain_mask': {**{'datatype': 'func', 'desc': 'brain',
                                                            'extension': 'nii.gz', 'suffix':'mask'},
                                                         **fixed_entities}}),
@@ -72,13 +71,6 @@ def fsl_first_level_wf(model,
         fsl.ImageMaths(suffix='_bet', op_string='-mas'),
         iterfield=['in_file', 'in_file2'],
         name='apply_brainmask')
-
-    exec_get_contrasts = pe.MapNode(
-        Function(input_names=['step', 'include_contrasts'], output_names=['contrasts'],
-                 function=utils.get_contrasts),
-        iterfield=['include_contrasts'],
-        name='exec_get_contrasts')
-    exec_get_contrasts.inputs.step = step
 
     specify_model = pe.MapNode(
         modelgen.SpecifyModel(high_pass_filter_cutoff=-1.0, input_units='secs'),
@@ -121,6 +113,11 @@ def fsl_first_level_wf(model,
                  function=utils.get_entities),
         iterfield=['func_file', 'contrasts'],
         name='produce_contrast_entities')
+
+    plot_matrices = pe.MapNode(
+        PlotMatrices(output_dir=output_dir),
+        iterfield=['mat_file', 'con_file', 'entities', 'run_info'],
+        name='plot_matrices')
 
     ds_effects = pe.MapNode(
         BIDSDataSink(base_directory=output_dir,
@@ -209,11 +206,13 @@ def fsl_first_level_wf(model,
             (run_rapidart, reshape_rapidart, [('outlier_files', 'outlier_files')]),
             (get_info, reshape_rapidart, [('run_info', 'run_info')]),
             (get_info, reshape_rapidart, [('run_metadata', 'metadata')]),
-            (reshape_rapidart, specify_model, [('run_info', 'subject_info')])
+            (reshape_rapidart, specify_model, [('run_info', 'subject_info')]),
+            (reshape_rapidart, plot_matrices, [('run_info', 'run_info')])
         ])
     else:
         workflow.connect([
-            (get_info, specify_model, [('run_info', 'subject_info')])
+            (get_info, specify_model, [('run_info', 'subject_info')]),
+            (get_info, plot_matrices, [('run_info', 'run_info')])
         ])
 
     if smoothing_level == 'l1':
@@ -252,6 +251,10 @@ def fsl_first_level_wf(model,
         (first_level_design, generate_model, [('fsf_files', 'fsf_file')]),
         (first_level_design, generate_model, [('ev_files', 'ev_files')]),
 
+        (get_info, plot_matrices, [('run_entities', 'entities')]),
+        (generate_model, plot_matrices, [('design_file', 'mat_file')]),
+        (generate_model, plot_matrices, [('con_file', 'con_file')]),
+
         (fit_model, estimate_model, [('functional_data', 'in_file')]),
         (generate_model, estimate_model, [('design_file', 'design_file')]),
         (generate_model, estimate_model, [('con_file', 'tcon_file')]),
@@ -268,9 +271,7 @@ def fsl_first_level_wf(model,
         (estimate_model, ds_variances, [('varcopes', 'in_file')]),
         (estimate_model, ds_zstats, [('zstats', 'in_file')]),
         (estimate_model, ds_tstats, [('tstats', 'in_file')]),
-        (estimate_model, ds_fstats, [('fstats', 'in_file')]),
-        #(estimate_model, 'dof_file', outputnode, 'dof'),
-        #(exec_get_contrasts, 'contrasts', outputnode, 'contrasts')
+        (estimate_model, ds_fstats, [('fstats', 'in_file')])
     ])
 
     return workflow

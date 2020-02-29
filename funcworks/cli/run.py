@@ -1,4 +1,7 @@
-#pylint: disable=C0103,R0913,R0914,W0404,C0114,C0116
+"""
+Main run script
+"""
+#pylint: disable=C0103,R0913,R0914,W0404,C0116,W0212,W0613,W0611,W1202
 import os
 import gc
 import sys
@@ -196,18 +199,17 @@ def build_workflow(opts, retval):
         retval['participant_label'] = BIDSLayout(opts.bids_dir).get_subjects()
 
     # Load base plugin_settings from file if --use-plugin
+    plugin_settings = {
+        'plugin': 'MultiProc',
+        'plugin_args': {
+            'raise_insufficient': False,
+            'maxtasksperchild': 1,
+        }
+    }
     if opts.use_plugin is not None:
         with open(opts.use_plugin) as f:
             plugin_settings = json.load(f)
-    else:
-        # Defaults
-        plugin_settings = {
-            'plugin': 'MultiProc',
-            'plugin_args': {
-                'raise_insufficient': False,
-                'maxtasksperchild': 1,
-            }
-        }
+
 
     # Resource management options
     # Note that we're making strong assumptions about valid plugin args
@@ -234,7 +236,7 @@ def build_workflow(opts, retval):
     retval['plugin_settings'] = plugin_settings
 
     # Set up directories
-    log_dir = output_dir / 'logs'
+    log_dir = Path(output_dir) / 'funcworks' / 'logs'
     # Check and create output and working directories
     output_dir.mkdir(exist_ok=True, parents=True)
     log_dir.mkdir(exist_ok=True, parents=True)
@@ -293,9 +295,9 @@ def build_workflow(opts, retval):
                                            detrend_poly=opts.detrend_poly)
     retval['return_code'] = 0
 
-    logs_path = Path(output_dir) / 'funcworks' / 'logs'
-    boilerplate = retval['workflow'].visit_desc()
-
+    #logs_path = Path(output_dir) / 'funcworks' / 'logs'
+    #boilerplate = retval['workflow'].visit_desc()
+    """
     if boilerplate:
         citation_files = {
             ext: logs_path / ('CITATION.%s' % ext)
@@ -313,6 +315,7 @@ def build_workflow(opts, retval):
         citation_files['md'].write_text(boilerplate)
         build_log.log(25, 'Works derived from this FUNCWorks execution should '
                       'include the following boilerplate:\n\n%s', boilerplate)
+    """
     return retval
 
 if __name__ == '__main__':

@@ -75,19 +75,18 @@ class GetModelInfo(IOBase):
     def _get_required_files(self):
         #A workaround to a current issue in pybids
         #that causes massive resource use when indexing derivative tsv files
-        import os.path as op
+        from pathlib import Path
         from bids.layout import parse_file_entities
         from bids.layout.writing import build_path
-        func = self.inputs.functional_file
-        entities = parse_file_entities(func)
+        func = Path(self.inputs.functional_file)
+        entities = parse_file_entities(str(func))
+        entities['run'] = '{:02d}'.format(entities['run'])
         confounds_pattern = \
         'sub-{subject}[_ses-{session}]_task-{task}_run-{run}_desc-confounds_regressors.tsv'
         meta_pattern = \
         'sub-{subject}[_ses-{session}]_task-{task}_run-{run}[_space-{space}]_desc-preproc_bold.json'
-        regressors_file = op.join(op.dirname(func),
-                                  build_path(entities, path_patterns=confounds_pattern))
-        meta_file = op.join(op.dirname(func),
-                            build_path(entities, path_patterns=meta_pattern))
+        regressors_file = func.parent / build_path(entities, path_patterns=confounds_pattern)
+        meta_file = func.parent / build_path(entities, path_patterns=meta_pattern)
         return regressors_file, meta_file, entities
 
     @staticmethod

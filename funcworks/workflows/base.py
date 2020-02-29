@@ -1,4 +1,4 @@
-#pylint: disable=R0913,R0914,C0114,C0116
+#pylint: disable=R0913,R0914,C0114,C0116,W0212
 import json
 from pathlib import Path
 from copy import deepcopy
@@ -21,7 +21,8 @@ def init_funcworks_wf(model_file,
         model = json.load(read_mdl)
 
     funcworks_wf = Workflow(name='funcworks_wf')
-    funcworks_wf.base_dir = str(work_dir)
+    (work_dir / model['Name']).mkdir(exist_ok=True, parents=True)
+    funcworks_wf.base_dir = work_dir / model['Name']
     if smoothing:
         smoothing_params = smoothing.split(':')
         if len(smoothing_params) == 1:
@@ -42,7 +43,9 @@ def init_funcworks_wf(model_file,
     for subject_id in participants:
         single_subject_wf = init_funcworks_subject_wf(model=model,
                                                       bids_dir=bids_dir,
-                                                      output_dir=output_dir / 'funcworks' / model['Name'],
+                                                      output_dir=(output_dir /
+                                                                  'funcworks' /
+                                                                  model['Name']),
                                                       work_dir=work_dir,
                                                       subject_id=subject_id,
                                                       analysis_level=analysis_level,
@@ -53,7 +56,8 @@ def init_funcworks_wf(model_file,
                                                       use_rapidart=use_rapidart,
                                                       detrend_poly=detrend_poly,
                                                       name=f'single_subject_{subject_id}_wf')
-        crash_dir = Path(output_dir) / 'logs' / model['Name'] / f'sub-{subject_id}' / run_uuid
+        crash_dir = (Path(output_dir) / 'funcworks' / 'logs' /
+                     model['Name'] / f'sub-{subject_id}' / run_uuid)
         crash_dir.mkdir(exist_ok=True, parents=True)
 
         single_subject_wf.config['execution']['crashdump_dir'] = crash_dir
@@ -80,10 +84,10 @@ def init_funcworks_subject_wf(model,
                               name):
 
     funcworks_single_subject_wf = Workflow(name=name)
-    stage = None
+    #stage = None
     for step in model['Steps']:
         if step['Level'] == 'run':
-            stage = 'run'
+            #stage = 'run'
             run_model = fsl_first_level_wf(model=model,
                                            step=step,
                                            bids_dir=bids_dir,
