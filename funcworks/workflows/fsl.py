@@ -40,7 +40,7 @@ def fsl_first_level_wf(model,
     elif smoothing_type == 'inp':
         dimensionality = 2
 
-    fixed_entities = model['Input']
+    fixed_entities = model['Input']['Include']
     if 'space' not in fixed_entities:
         fixed_entities['space'] = None
 

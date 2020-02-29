@@ -282,7 +282,11 @@ def build_workflow(opts, retval):
                                participant_label=opts.participant_label,
                                uuid=run_uuid))
 
-    retval['workflow'] = init_funcworks_wf(model_file=opts.model_file,
+    if not opts.model_file:
+        model_file = Path(bids_dir) / 'models'/ 'model-default_smdl.json'
+    else:
+        model_file = opts.model_file
+    retval['workflow'] = init_funcworks_wf(model_file=model_file,
                                            bids_dir=opts.bids_dir,
                                            output_dir=opts.output_dir,
                                            work_dir=opts.work_dir,
