@@ -43,6 +43,8 @@ def fsl_first_level_wf(model,
     fixed_entities = model['Input']['Include']
     if 'space' not in fixed_entities:
         fixed_entities['space'] = None
+    event_entities = fixed_entities.copy()
+    event_entities.pop('space', None)
 
     workflow.__desc__ = ""
     (work_dir / model['Name']).mkdir(exist_ok=True)
@@ -53,10 +55,9 @@ def fsl_first_level_wf(model,
                            output_query={'func': {**{'datatype':'func', 'desc':'preproc',
                                                      'extension':'nii.gz', 'suffix':'bold'},
                                                   **fixed_entities},
-                                         'events': {'datatype':'func', 'suffix':'events',
-                                                    'extension':'tsv',
-                                                    'task':fixed_entities['task'],
-                                                    'run':fixed_entities['run']},
+                                         'events': {**{'datatype':'func', 'suffix':'events',
+                                                       'extension':'tsv'},
+                                                    **event_entities},
                                          'brain_mask': {**{'datatype': 'func', 'desc': 'brain',
                                                            'extension': 'nii.gz', 'suffix':'mask'},
                                                         **fixed_entities}}),
