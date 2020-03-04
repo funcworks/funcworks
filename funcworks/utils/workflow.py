@@ -65,14 +65,15 @@ def snake_to_camel(string):
     return words[0] + ''.join(word.title() for word in words[1:])
 
 def reshape_ra(run_info, metadata, outlier_files):
+    import pandas as pd
     import numpy as np
     from nipype.interfaces.base import Bunch
     run_dict = run_info.dictcopy()
-    outlier_frame = np.genfromtxt(outlier_files, dtype=int)
-    for i, value in enumerate(outlier_frame):
+    outlier_frame = pd.read_csv(outlier_files, header=None, names=['outlier_index'])
+    for i, row in outlier_frame.iterrows():
         run_dict['regressor_names'].append(f'rapidart{i:02d}')
         ra_col = np.zeros(metadata['NumTimepoints'])
-        ra_col[value] = 1
+        ra_col[row['outlier_index']] = 1
         run_dict['regressors'].append(ra_col)
     run_info = Bunch(**run_dict)
     return run_info
