@@ -88,7 +88,7 @@ def fsl_first_level_wf(model,
 
     first_level_design = pe.MapNode(
         fsl.Level1Design(bases={'dgamma':{'derivs': False}},
-                         model_serial_correlations=True),
+                         model_serial_correlations=False),
         iterfield=['session_info', 'interscan_interval', 'contrasts'],
         name='first_level_design')
 
@@ -100,7 +100,8 @@ def fsl_first_level_wf(model,
 
     estimate_model = pe.MapNode(
         fsl.FILMGLS(environ={'FSLOUTPUTTYPE': 'NIFTI_GZ'}, mask_size=5, threshold=0.0,
-                    output_type='NIFTI_GZ', results_dir='results', smooth_autocorr=True),
+                    output_type='NIFTI_GZ', results_dir='results', #smooth_autocorr=True
+                    autocorr_noest=True),
         iterfield=['design_file', 'in_file', 'tcon_file'],
         name='estimate_model')
 
