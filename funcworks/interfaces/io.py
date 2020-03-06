@@ -81,6 +81,7 @@ class GetModelInfo(IOBase):
         func = Path(self.inputs.functional_file)
         entities = parse_file_entities(str(func))
         entities['run'] = '{:02d}'.format(entities['run'])
+        entities.pop('suffix', None)
         confounds_pattern = \
         'sub-{subject}[_ses-{session}]_task-{task}_run-{run}_desc-confounds_regressors.tsv'
         meta_pattern = \

@@ -49,14 +49,13 @@ def get_smoothing_info_fsl(func, brain_mask, mean_image):
 
     return usans, btthresh
 
-def get_entities(func_file, contrasts):
+def get_entities(run_entities, contrasts):
     from bids.layout import parse_file_entities
     contrast_entities = []
-    entities = parse_file_entities(func_file)
     contrast_names = [contrast[0] for contrast in contrasts]
     for contrast_name in contrast_names:
-        entities.update({'contrast':contrast_name})
-        contrast_entities.append(entities.copy())
+        run_entities.update({'contrast':contrast_name})
+        contrast_entities.append(run_entities.copy())
     return contrast_entities
 
 def snake_to_camel(string):
