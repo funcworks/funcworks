@@ -123,7 +123,7 @@ def main():
     gc.collect()
 
     errno = 1  # Default is error exit unless otherwise set
-    funcworks_wf.write_graph(graph2use="colored", format='png')
+    #funcworks_wf.write_graph(graph2use="colored", format='png')
     try:
         funcworks_wf.run(**plugin_settings)
     except Exception as e:
