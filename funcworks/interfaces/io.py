@@ -1,15 +1,16 @@
-# pylint: disable=C0415
-import os
-import shutil
+# pylint: disable=C0415,C0114,C0115,W0404,W0621,W0612
+from pathlib import Path
 from nipype.interfaces.base import (
-    BaseInterface, BaseInterfaceInputSpec, Bunch, TraitedSpec, SimpleInterface,
-    InputMultiPath, OutputMultiPath, File, Directory,
-    traits, isdefined
+    BaseInterfaceInputSpec, Bunch, TraitedSpec,
+    InputMultiPath, OutputMultiPath, File,
+    traits, isdefined, DynamicTraitedSpec
     )
-from nipype.interfaces.io import IOBase
+from nipype.interfaces.io import IOBase, add_traits
 import nibabel as nb
+import numpy as np
+from ..utils import snake_to_camel
 
-class GetModelInfoInputSpec(BaseInterfaceInputSpec):
+class GetRunModelInfoInputSpec(BaseInterfaceInputSpec):
     functional_file = File(exists=True, mandatory=True)
     events_file = File(exists=True, mandatory=False)
     model = traits.Dict(mandatory=True)
@@ -17,7 +18,7 @@ class GetModelInfoInputSpec(BaseInterfaceInputSpec):
                               desc=('Legendre polynomials to regress out'
                                     'for temporal filtering'))
 
-class GetModelInfoOutputSpec(TraitedSpec):
+class GetRunModelInfoOutputSpec(TraitedSpec):
     run_info = traits.Any(desc='Model Info required to construct Run Level Model')
     event_regressors = traits.List(desc='List of event types included in Run Model')
     confound_regressors = traits.List(desc='List of confound_regressors included in Run Model')
@@ -28,10 +29,11 @@ class GetModelInfoOutputSpec(TraitedSpec):
                                         desc='File containing first six motion regressors')
     repetition_time = traits.Float(desc='Repetition Time for the dataset')
 
-class GetModelInfo(IOBase):
+#TODO: Reconfigure GetRunModelInfo to produce accurate DummyContrast Behavior
+class GetRunModelInfo(IOBase):
     '''Grabs EV files for subject based on contrasts of interest'''
-    input_spec = GetModelInfoInputSpec
-    output_spec = GetModelInfoOutputSpec
+    input_spec = GetRunModelInfoInputSpec
+    output_spec = GetRunModelInfoOutputSpec
 
     _always_run = True
 
@@ -194,3 +196,97 @@ class GetModelInfo(IOBase):
             poly_arrays.append(legendre(i)(np.linspace(-1, 1, len(regressors_frame))))
 
         return poly_names, poly_arrays
+
+class MergeAll(IOBase):
+    input_spec = DynamicTraitedSpec
+    output_spec = DynamicTraitedSpec
+
+    def __init__(self, fields=None, check_lengths=True):
+        super(MergeAll, self).__init__()
+        self._check_lengths = check_lengths
+        self._lengths = None
+        if not fields:
+            raise ValueError("Fields must be a non-empty list")
+
+        self._fields = fields
+        add_traits(self.inputs, fields)
+
+    def _add_output_traits(self, base):
+        return add_traits(base, self._fields)
+
+    def _calculate_length(self, val):
+        _lengths = list(map(len, val))
+        if self._lengths is None:
+            self._lengths = _lengths
+        elif _lengths != self._lengths:
+            raise ValueError("List lengths must be consistent across fields")
+        self._lengths = _lengths
+
+    def _list_outputs(self):
+        outputs = self._outputs().get()
+        for key in self._fields:
+            val = getattr(self.inputs, key)
+            # Allow for empty inputs
+            if isdefined(val):
+                if self._check_lengths is True:
+                    self._calculate_length(val)
+                outputs[key] = [elem for sublist in val for elem in sublist]
+        self._lengths = None
+
+        return outputs
+
+class GenerateHigherInfoInputSpec(BaseInterfaceInputSpec):
+    effects = InputMultiPath(desc='Effect Maps from earlier level')
+    variances = InputMultiPath(desc='Variance Maps from earlier level')
+    metadata = InputMultiPath(desc='Metadata Maps from earlier level')
+    step_info = traits.Dict(desc='Step info from model file')
+
+class GenerateHigherInfoOutputSpec(TraitedSpec):
+    design_files = OutputMultiPath(File, desc='Design Matrix Files')
+    contrast_files = OutputMultiPath(File, desc='Contrast Matrix Files')
+    group_files = OutputMultiPath(File, desc=' Group Matrix Files')
+    cope_files = OutputMultiPath(File, desc='Combined Contrast Parameter Files')
+    variance_files = OutputMultiPath(File, desc='Combined Variance Files')
+    dof_files = OutputMultiPath(File, desc='Combined DOF Files')
+
+class GenerateHigherInfo(IOBase):
+    inputspec = GenerateHigherInfoInputSpec
+    outputspec = GenerateHigherInfoOutputSpec
+
+    _always_run = True
+
+    def _list_outputs(self):
+        return self
+        #return {
+        #    'design_files': design_files,
+        #    'contrast_files': contrast_files,
+        #    'group_files': group_files,
+        #    'cope_files': cope_files,
+        #    'variance_files': variance_files,
+        #    'dof_files': dof_files,
+        #    'entities': entities}
+
+    @staticmethod
+    def _produce_design_files(effects, variances, step_info):
+        from bids.layout import parse_file_entities
+        design_files = []
+        contrast_files = []
+        group_files = []
+        cope_files = []
+        variance_files = []
+        dof_files = []
+        entities = []
+        for contrast in step_info['DummyContrasts']['Conditions']:
+            ents = parse_file_entities(effects[0])
+            ents.pop('run', None)
+            ents.pop('contrast', None)
+            contrast_name = snake_to_camel(contrast)
+            ents.update({'contrast': contrast_name})
+            cont_effects = [x for x in effects if contrast_name in x]
+            cont_variance = [x for x in variances if contrast_name in x]
+            affine = nb.load(cont_effects[0]).affine
+            meffects = np.concatenate([nb.load(run) for run in cont_effects])
+            mvariances = np.concatenate([nb.load(run) for run in cont_variance])
+            design_path = Path.cwd() / contrast_name + '.mat'
+            contrast_path = Path.cwd() / contrast_name + '.con'
+            grp_path = Path.cwd() / contrast_name + '.con'

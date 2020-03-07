@@ -50,7 +50,6 @@ def get_smoothing_info_fsl(func, brain_mask, mean_image):
     return usans, btthresh
 
 def get_entities(run_entities, contrasts):
-    from bids.layout import parse_file_entities
     contrast_entities = []
     contrast_names = [contrast[0] for contrast in contrasts]
     for contrast_name in contrast_names:

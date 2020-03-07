@@ -8,23 +8,23 @@ from nipype.interfaces import fsl, io
 from nipype.interfaces.utility import Function, IdentityInterface
 from nipype.algorithms import modelgen, rapidart as ra
 from ..interfaces.bids import (BIDSDataSink)
-from ..interfaces.io import GetModelInfo
+from ..interfaces.io import GetRunModelInfo, MergeAll
 from ..interfaces.visualization import PlotMatrices
 from .. import utils
 
-def fsl_first_level_wf(model,
-                       step,
-                       bids_dir,
-                       output_dir,
-                       work_dir,
-                       subject_id,
-                       derivatives,
-                       smoothing_fwhm=None,
-                       smoothing_level=None,
-                       smoothing_type=None,
-                       use_rapidart=False,
-                       detrend_poly=None,
-                       name='fsl_first_level_wf'):
+def fsl_run_level_wf(model,
+                     step,
+                     bids_dir,
+                     output_dir,
+                     work_dir,
+                     subject_id,
+                     derivatives,
+                     smoothing_fwhm=None,
+                     smoothing_level=None,
+                     smoothing_type=None,
+                     use_rapidart=False,
+                     detrend_poly=None,
+                     name=None):
     """
     This workflow generates processes function data with information given in
     the model file
@@ -65,7 +65,7 @@ def fsl_first_level_wf(model,
         name='bdg')
 
     get_info = pe.MapNode(
-        GetModelInfo(model=step, detrend_poly=detrend_poly),
+        GetRunModelInfo(model=step, detrend_poly=detrend_poly),
         iterfield=['functional_file', 'events_file'],
         name='get_info')
 
@@ -187,7 +187,7 @@ def fsl_first_level_wf(model,
         name='setup_susan')
 
     run_susan = pe.MapNode(
-        fsl.SUSAN(),
+        fsl.SUSAN(fwhm=smoothing_fwhm, dimension=dimensionality),
         iterfield=['in_file', 'brightness_threshold', 'usans'],
         name='run_susan')
 
@@ -204,6 +204,11 @@ def fsl_first_level_wf(model,
                  function=utils.correct_matrix),
         iterfield=['design_matrix'],
         name='correct_matrices')
+
+    collate = pe.Node(
+        MergeAll(['effect_maps', 'variance_maps', 'contrast_metadata']),
+        name='collate_run_level')
+
     #Setup connections among nodes
     workflow.connect([
         (bdg, apply_brainmask, [('func', 'in_file')]),
@@ -231,8 +236,6 @@ def fsl_first_level_wf(model,
         ])
 
     if smoothing_level == 'l1':
-        run_susan.inputs.fwhm = smoothing_fwhm
-        run_susan.inputs.dimension = dimensionality
         workflow.connect([
             (apply_brainmask, get_tmean_img, [('out_file', 'in_file')]),
             (apply_brainmask, setup_susan, [('out_file', 'func')]),
@@ -300,29 +303,43 @@ def fsl_first_level_wf(model,
         (estimate_model, ds_variances, [('varcopes', 'in_file')]),
         (estimate_model, ds_zstats, [('zstats', 'in_file')]),
         (estimate_model, ds_tstats, [('tstats', 'in_file')]),
-        (estimate_model, ds_fstats, [('fstats', 'in_file')])
+        (estimate_model, ds_fstats, [('fstats', 'in_file')]),
+
+        (ds_effects, collate, [('effects', 'effect_maps')]),
+        (ds_variances, collate, [('variances', 'variance_maps')]),
+        #(ds_metadata, collate, [('metadata', 'metadata')])
     ])
 
     return workflow
 
-'''
-def fsl_session_level_wf(output_dir,
-                         subject_id,
-                         work_dir,
-                         derivatives,
-                         model,
-                         step,
-                         bids_dir,
-                         name='fsl_session_level_wf'):
+
+def fsl_higher_level_wf(output_dir,
+                        subject_id,
+                        work_dir,
+                        derivatives,
+                        model,
+                        step,
+                        bids_dir,
+                        smoothing_fwhm=None,
+                        smoothing_level=None,
+                        smoothing_type=None,
+                        name=None):
     """
     This workflow generates processes functional_data across a single session (read: between runs)
     and computes effects, variances, residuals and statmaps
     using FSLs FLAME0 given information in the bids model file
 
     """
+
     workflow = pe.Workflow(name=name)
     workflow.base_dir = work_dir
     workflow.desc = ""
+
+
+
+    if smoothing_level == 'l2':
+        pass
+    '''
     return_conts = pe.Node(Function(input_names=['subject_id', 'derivatives'],
                                     output_names=['effects', 'variances', 'dofs'],
                                     function=utils.return_contrasts), name='return_conts')
@@ -404,6 +421,6 @@ def fsl_session_level_wf(output_dir,
     workflow.connect(flameo_fe, 'zstats', sinkd, '.zstats')
     workflow.connect(flameo_fe, 'res4d', sinkd, '.res4d')
     workflow.connect(get_renames, 'new_names', sinkd, 'substitutions')
+    '''
 
     return workflow
-'''

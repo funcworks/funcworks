@@ -284,6 +284,8 @@ def build_workflow(opts, retval):
 
     if not opts.model_file:
         model_file = Path(bids_dir) / 'models'/ 'model-default_smdl.json'
+        if not model_file.exists():
+            raise ValueError('Default Model File not Found')
     else:
         model_file = opts.model_file
     retval['workflow'] = init_funcworks_wf(model_file=model_file,
