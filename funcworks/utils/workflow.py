@@ -76,3 +76,31 @@ def reshape_ra(run_info, metadata, outlier_files):
         run_dict['regressors'].append(ra_col)
     run_info = Bunch(**run_dict)
     return run_info
+
+def correct_matrix(design_matrix):
+    import numpy as np
+    import pandas as pd
+    from pathlib import Path
+
+    with open(design_matrix, 'r') as dmr:
+        content = dmr.readlines()
+        matrix_index = content.index('/Matrix\n') + 1
+    matrix_data = pd.read_csv(
+        design_matrix, skiprows=matrix_index, delim_whitespace=True,
+        header=None)
+    matrix_path = Path.cwd() / 'run0.mat'
+    if matrix_path.is_file():
+        open(matrix_path, 'w').close()
+    with open(matrix_path, 'a') as dma:
+        dma.writelines('/NumWaves {columns}\t\n'.format(columns=matrix_data.shape[1]))
+        dma.writelines('/NumPoints {rows}\t\n'.format(rows=matrix_data.shape[0]))
+        dma.writelines('/Matrix\n')
+    for idx, column in matrix_data.T.iterrows():
+        if column.max() < .00000000000001:
+            matrix_data[idx] = np.ones(len(matrix_data))
+
+    matrix_data.to_csv(
+        matrix_path, index=None, columns=None,
+        sep='\t', line_terminator='\t\n',
+        mode='a', header=None)
+    return str(matrix_path)

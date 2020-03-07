@@ -58,17 +58,20 @@ class PlotMatrices(IOBase):
                                      entities=ents,
                                      path_pattern=image_pattern,
                                      output_dir=output_dir,
-                                     suffix='design')
+                                     suffix='design',
+                                     cmap='viridis')
         con_plot = self._plot_matrix(matrix=contrast_matrix,
                                      entities=ents,
                                      path_pattern=image_pattern,
                                      output_dir=output_dir,
-                                     suffix='contrasts')
+                                     suffix='contrasts',
+                                     cmap='RdBu_r')
         corr_plot = self._plot_corr_matrix(corr_matrix=corr_matrix,
                                            entities=ents,
                                            path_pattern=image_pattern,
                                            output_dir=output_dir,
-                                           regressor_names=regressor_names)
+                                           regressor_names=regressor_names,
+                                           cmap='RdBu_r')
         ents.update({'suffix':'design'})
         design_path = output_dir / build_path(ents, path_patterns=design_matrix_pattern)
         design_path.parent.mkdir(exist_ok=True, parents=True)
@@ -81,33 +84,28 @@ class PlotMatrices(IOBase):
     @staticmethod
     def _parse_matrices(regressor_names, confound_names, mat_file, con_file):
         with open(mat_file, 'r') as matf:
-            for idx, line in enumerate(matf.readlines()):
-                if '/Matrix' in line:
-                    design_matrix = np.genfromtxt(mat_file,
-                                                  skip_header=idx + 1,
-                                                  delimiter='\t')[:, :-1]
-                    break
-        contrast_names = []
+            content = matf.readlines()
+        design_matrix = pd.read_csv(
+            mat_file, skiprows=content.index('/Matrix\n') + 1,
+            delim_whitespace=True, header=None)
         with open(con_file, 'r') as matf:
-            for idx, line in enumerate(matf.readlines()):
-                if 'ContrastName' in line:
-                    _, contrast_name = line.split('\t')
-                    contrast_names.append(contrast_name.split()[0])
-                if '/Matrix' in line:
-                    contrast_matrix = np.genfromtxt(con_file, skip_header=idx+1)
-                    break
-        design_matrix = pd.DataFrame(data=design_matrix, columns=regressor_names + confound_names)
-        contrast_matrix = pd.DataFrame(data=contrast_matrix,
-                                       columns=regressor_names + confound_names,
-                                       index=contrast_names)
+            content = matf.readlines()
+        contrast_names = [x.split('\t')[-1] for x in content if 'ContrastName' in x]
+        contrast_matrix = pd.read_csv(
+            con_file, skiprows=content.index('/Matrix\n') + 1,
+            delim_whitespace=True, header=None)
+
+        design_matrix.columns = regressor_names + confound_names
+        contrast_matrix.columns = regressor_names + confound_names
+        contrast_matrix.index = contrast_names
         corr_matrix = design_matrix.corr()
         return design_matrix, corr_matrix, contrast_matrix
 
     @staticmethod
-    def _plot_matrix(matrix, entities, path_pattern, output_dir, suffix=None):
+    def _plot_matrix(matrix, entities, path_pattern, output_dir, suffix=None, cmap='viridis'):
         fig = plt.figure(figsize=(14, 10))
         vmax = np.abs(matrix.values).max()
-        sns.heatmap(data=matrix, cmap='viridis', ax=fig.gca(),
+        sns.heatmap(data=matrix, cmap=cmap, ax=fig.gca(),
                     vmin=-vmax, vmax=vmax,
                     cbar_kws={'shrink': 0.5, 'ticks': np.linspace(-vmax, vmax, 5)})
         entities.update({'suffix': suffix})
@@ -118,13 +116,12 @@ class PlotMatrices(IOBase):
 
     @staticmethod
     def _plot_corr_matrix(corr_matrix, entities, path_pattern,
-                          output_dir, regressor_names):
+                          output_dir, regressor_names, cmap=None):
         fig = plt.figure(figsize=(10, 10))
-        vmax = np.abs(corr_matrix.values).max()
-        plot = sns.heatmap(data=corr_matrix, square=True, cmap='RdBu_r', ax=fig.gca(),
-                           vmin=-vmax, vmax=vmax,
+        plot = sns.heatmap(data=corr_matrix, square=True, cmap=cmap, ax=fig.gca(),
+                           vmin=-1, vmax=1,
                            xticklabels=True, yticklabels=True, linewidths=0.3,
-                           cbar_kws={'shrink': 0.5, 'ticks': np.linspace(-vmax, vmax, 5)})
+                           cbar_kws={'shrink': 0.5, 'ticks': np.linspace(-1, 1, 5)})
         plot.xaxis.tick_top()
         xtl = plot.get_xticklabels()
         plot.set_xticklabels(xtl, rotation=90)

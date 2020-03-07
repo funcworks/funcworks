@@ -50,17 +50,18 @@ def fsl_first_level_wf(model,
     (work_dir / model['Name']).mkdir(exist_ok=True)
 
     bdg = pe.Node(
-        io.BIDSDataGrabber(base_dir=bids_dir, subject=subject_id,
-                           extra_derivatives=derivatives, index_derivatives=True,
-                           output_query={'func': {**{'datatype':'func', 'desc':'preproc',
-                                                     'extension':'nii.gz', 'suffix':'bold'},
-                                                  **fixed_entities},
-                                         'events': {**{'datatype':'func', 'suffix':'events',
-                                                       'extension':'tsv'},
-                                                    **event_entities},
-                                         'brain_mask': {**{'datatype': 'func', 'desc': 'brain',
-                                                           'extension': 'nii.gz', 'suffix':'mask'},
-                                                        **fixed_entities}}),
+        io.BIDSDataGrabber(
+            base_dir=bids_dir, subject=subject_id,
+            extra_derivatives=derivatives, index_derivatives=True,
+            output_query={'func': {**{'datatype':'func', 'desc':'preproc',
+                                      'extension':'nii.gz', 'suffix':'bold'},
+                                   **fixed_entities},
+                          'events': {**{'datatype':'func', 'suffix':'events',
+                                        'extension':'tsv'},
+                                     **event_entities},
+                          'brain_mask': {**{'datatype': 'func', 'desc': 'brain',
+                                            'extension': 'nii.gz', 'suffix':'mask'},
+                                         **fixed_entities}}),
         name='bdg')
 
     get_info = pe.MapNode(
@@ -128,6 +129,7 @@ def fsl_first_level_wf(model,
         iterfield=['entities', 'in_file'],
         run_without_submitting=True,
         name='ds_effects')
+
     ds_variances = pe.MapNode(
         BIDSDataSink(base_directory=output_dir,
                      fixed_entities={'stat':'variance', 'suffix':'statmap'},
@@ -135,18 +137,21 @@ def fsl_first_level_wf(model,
         iterfield=['entities', 'in_file'],
         run_without_submitting=True,
         name='ds_variances')
+
     ds_zstats = pe.MapNode(
         BIDSDataSink(base_directory=output_dir, fixed_entities={'stat':'z', 'suffix':'statmap'},
                      path_patterns=image_pattern),
         iterfield=['entities', 'in_file'],
         run_without_submitting=True,
         name='ds_zstats')
+
     ds_tstats = pe.MapNode(
         BIDSDataSink(base_directory=output_dir, fixed_entities={'stat':'t', 'suffix':'statmap'},
                      path_patterns=image_pattern),
         iterfield=['entities', 'in_file'],
         run_without_submitting=True,
         name='ds_tstats')
+
     ds_fstats = pe.MapNode(
         BIDSDataSink(base_directory=output_dir, fixed_entities={'stat':'F', 'suffix':'statmap'},
                      path_patterns=image_pattern),
@@ -191,6 +196,14 @@ def fsl_first_level_wf(model,
         iterfield=['in_file', 'in_file2'],
         name='apply_mask_smooth')
 
+    #Exists solely to correct undesirable behavior of FSL
+    #that results in loss of constant columns
+    correct_matrices = pe.MapNode(
+        Function(input_names=['design_matrix'],
+                 output_names=['design_matrix'],
+                 function=utils.correct_matrix),
+        iterfield=['design_matrix'],
+        name='correct_matrices')
     #Setup connections among nodes
     workflow.connect([
         (bdg, apply_brainmask, [('func', 'in_file')]),
@@ -252,16 +265,29 @@ def fsl_first_level_wf(model,
 
         (first_level_design, generate_model, [('fsf_files', 'fsf_file')]),
         (first_level_design, generate_model, [('ev_files', 'ev_files')]),
+    ])
+    if detrend_poly:
+        workflow.connect([
+            (generate_model, correct_matrices, [('design_file', 'design_matrix')]),
+            (correct_matrices, plot_matrices, [('design_matrix', 'mat_file')]),
+            (correct_matrices, estimate_model, [('design_matrix', 'design_file')])
+        ])
+    else:
+        workflow.connect([
+            (generate_model, plot_matrices, [('design_file', 'mat_file')]),
+            (generate_model, estimate_model, [('design_file', 'design_file')]),
+        ])
+
+    workflow.connect([
+        #TODO: Wrap this in to get_info
 
         (get_info, plot_matrices, [('run_entities', 'entities')]),
-        (generate_model, plot_matrices, [('design_file', 'mat_file')]),
         (generate_model, plot_matrices, [('con_file', 'con_file')]),
 
         (fit_model, estimate_model, [('functional_data', 'in_file')]),
-        (generate_model, estimate_model, [('design_file', 'design_file')]),
         (generate_model, estimate_model, [('con_file', 'tcon_file')]),
 
-        #TODO: Wrap this in to get_info
+
         (get_info, produce_contrast_entities, [('run_entities', 'run_entities')]),
         (get_info, produce_contrast_entities, [('run_contrasts', 'contrasts')]),
 
