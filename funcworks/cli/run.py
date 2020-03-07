@@ -123,7 +123,7 @@ def main():
     gc.collect()
 
     errno = 1  # Default is error exit unless otherwise set
-    funcworks_wf.write_graph(graph2use="colored", format='png')
+    #funcworks_wf.write_graph(graph2use="colored", format='png')
     try:
         funcworks_wf.run(**plugin_settings)
     except Exception as e:
@@ -279,7 +279,7 @@ def build_workflow(opts, retval):
     # Build main workflow
     build_log.log(25, INIT_MSG(version=__version__,
                                bids_dir=bids_dir,
-                               participant_label=opts.participant_label,
+                               participant_label=retval['participant_label'],
                                uuid=run_uuid))
 
     if not opts.model_file:
