@@ -279,7 +279,7 @@ def build_workflow(opts, retval):
     # Build main workflow
     build_log.log(25, INIT_MSG(version=__version__,
                                bids_dir=bids_dir,
-                               participant_label=opts.participant_label,
+                               participant_label=retval['participant_label'],
                                uuid=run_uuid))
 
     if not opts.model_file:
