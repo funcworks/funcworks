@@ -60,7 +60,7 @@ def init_funcworks_wf(model_file,
                      model['Name'] / f'sub-{subject_id}' / run_uuid)
         crash_dir.mkdir(exist_ok=True, parents=True)
 
-        single_subject_wf.config['execution']['crashdump_dir'] = crash_dir
+        single_subject_wf.config['execution']['crashdump_dir'] = str(crash_dir)
 
         for node in single_subject_wf._get_all_nodes():
             node.config = deepcopy(single_subject_wf.config)
