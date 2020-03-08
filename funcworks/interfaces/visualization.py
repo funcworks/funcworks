@@ -103,7 +103,8 @@ class PlotMatrices(IOBase):
                     cbar_kws={'shrink': 0.5, 'ticks': np.linspace(-vmax, vmax, 5)})
         entities = self.inputs.entities
         entities.update({'suffix': suffix})
-        matrix_path = self.inputs.output_dir / build_path(entities, path_patterns=path_pattern)
+        matrix_path = \
+            Path(self.inputs.output_dir) / build_path(entities, path_patterns=path_pattern)
         matrix_path.parent.mkdir(exist_ok=True, parents=True)
         plt.savefig(matrix_path, bbox_inches='tight')
         return matrix_path
@@ -121,7 +122,8 @@ class PlotMatrices(IOBase):
         plot.vlines([len(regressor_names)], 0, len(regressor_names))
         entities = self.inputs.entities
         entities.update({'suffix': 'corr'})
-        matrix_path = self.inputs.output_dir / build_path(entities, path_patterns=path_pattern)
+        matrix_path = \
+            Path(self.inputs.output_dir) / build_path(entities, path_patterns=path_pattern)
         matrix_path.parent.mkdir(exist_ok=True, parents=True)
         plt.savefig(matrix_path, bbox_inches='tight')
         return matrix_path

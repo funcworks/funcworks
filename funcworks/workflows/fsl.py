@@ -8,7 +8,8 @@ from nipype.interfaces import fsl, io
 from nipype.interfaces.utility import Function, IdentityInterface
 from nipype.algorithms import modelgen, rapidart as ra
 from ..interfaces.bids import (BIDSDataSink)
-from ..interfaces.io import GetRunModelInfo, MergeAll
+from ..interfaces.modelgen import GetRunModelInfo, GenerateHigherInfo
+from ..interfaces.io import MergeAll, CollateWithMetadata
 from ..interfaces.visualization import PlotMatrices
 from .. import utils
 
@@ -24,7 +25,7 @@ def fsl_run_level_wf(model,
                      smoothing_type=None,
                      use_rapidart=False,
                      detrend_poly=None,
-                     name=None):
+                     name='fsl_run_level_wf'):
     """
     This workflow generates processes function data with information given in
     the model file
@@ -111,53 +112,32 @@ def fsl_run_level_wf(model,
                      '[_rec-{reconstruction}][_run-{run}][_echo-{echo}][_space-{space}]'
                      '_contrast-{contrast}_stat-{stat<effect|variance|z|p|t|F>}_{suffix}.nii.gz')
 
-    produce_contrast_entities = pe.MapNode(
-        Function(input_names=['run_entities', 'contrasts'], output_names='contrast_entities',
-                 function=utils.get_entities),
-        iterfield=['run_entities', 'contrasts'],
-        name='produce_contrast_entities')
+    collate = pe.Node(
+        MergeAll(['effect_maps', 'variance_maps', 'tstat_maps', 'zscore_maps']),
+        name='collate_run_level')
+
+    collate_outputs = pe.Node(
+        CollateWithMetadata(
+            fields=['effect_maps', 'variance_maps', 'tstat_maps', 'zscore_maps'],
+            field_to_metadata_map={
+                'effect_maps': {'stat': 'effect'},
+                'variance_maps': {'stat': 'variance'},
+                'pvalue_maps': {'stat': 'p'},
+                'zscore_maps': {'stat': 'z'},
+            }),
+        name=f'collate_run_outputs')
 
     plot_matrices = pe.MapNode(
         PlotMatrices(output_dir=output_dir),
         iterfield=['mat_file', 'con_file', 'entities', 'run_info'],
         name='plot_matrices')
 
-    ds_effects = pe.MapNode(
+    ds_contrast_maps = pe.Node(
         BIDSDataSink(base_directory=output_dir,
-                     fixed_entities={'stat':'effect', 'suffix':'statmap'},
                      path_patterns=image_pattern),
         iterfield=['entities', 'in_file'],
         run_without_submitting=True,
         name='ds_effects')
-
-    ds_variances = pe.MapNode(
-        BIDSDataSink(base_directory=output_dir,
-                     fixed_entities={'stat':'variance', 'suffix':'statmap'},
-                     path_patterns=image_pattern),
-        iterfield=['entities', 'in_file'],
-        run_without_submitting=True,
-        name='ds_variances')
-
-    ds_zstats = pe.MapNode(
-        BIDSDataSink(base_directory=output_dir, fixed_entities={'stat':'z', 'suffix':'statmap'},
-                     path_patterns=image_pattern),
-        iterfield=['entities', 'in_file'],
-        run_without_submitting=True,
-        name='ds_zstats')
-
-    ds_tstats = pe.MapNode(
-        BIDSDataSink(base_directory=output_dir, fixed_entities={'stat':'t', 'suffix':'statmap'},
-                     path_patterns=image_pattern),
-        iterfield=['entities', 'in_file'],
-        run_without_submitting=True,
-        name='ds_tstats')
-
-    ds_fstats = pe.MapNode(
-        BIDSDataSink(base_directory=output_dir, fixed_entities={'stat':'F', 'suffix':'statmap'},
-                     path_patterns=image_pattern),
-        iterfield=['entities', 'in_file'],
-        run_without_submitting=True,
-        name='ds_fstats')
 
     run_rapidart = pe.MapNode(
         ra.ArtifactDetect(use_differences=[True, False], use_norm=True,
@@ -168,10 +148,10 @@ def fsl_run_level_wf(model,
         name='run_rapidart')
 
     reshape_rapidart = pe.MapNode(
-        Function(input_names=['run_info', 'metadata', 'outlier_files'],
+        Function(input_names=['run_info', 'func', 'outlier_files'],
                  output_names=['run_info'],
                  function=utils.reshape_ra),
-        iterfield=['outlier_files', 'run_info', 'metadata'],
+        iterfield=['outlier_files', 'run_info', 'func'],
         name='reshape_rapidart')
 
     get_tmean_img = pe.MapNode(
@@ -205,27 +185,24 @@ def fsl_run_level_wf(model,
         iterfield=['design_matrix'],
         name='correct_matrices')
 
-    collate = pe.Node(
-        MergeAll(['effect_maps', 'variance_maps', 'contrast_metadata']),
-        name='collate_run_level')
 
     #Setup connections among nodes
     workflow.connect([
-        (bdg, apply_brainmask, [('func', 'in_file')]),
-        (bdg, apply_brainmask, [('brain_mask', 'in_file2')]),
-        (bdg, get_info, [('func', 'functional_file')]),
-        (bdg, get_info, [('events', 'events_file')])
+        (bdg, apply_brainmask, [('func', 'in_file'),
+                                ('brain_mask', 'in_file2')]),
+        (bdg, get_info, [('func', 'functional_file'),
+                         ('events', 'events_file')])
     ])
 
     if use_rapidart:
         workflow.connect([
             (get_info, run_rapidart,
              [('motion_parameters', 'realignment_parameters')]),
-            (bdg, run_rapidart, [('func', 'realigned_files')]),
-            (bdg, run_rapidart, [('brain_mask', 'mask_file')]),
+            (bdg, run_rapidart, [('func', 'realigned_files'),
+                                 ('brain_mask', 'mask_file')]),
             (run_rapidart, reshape_rapidart, [('outlier_files', 'outlier_files')]),
             (get_info, reshape_rapidart, [('run_info', 'run_info')]),
-            (get_info, reshape_rapidart, [('run_metadata', 'metadata')]),
+            (bdg, reshape_rapidart, [('func', 'func')]),
             (reshape_rapidart, specify_model, [('run_info', 'subject_info')]),
             (reshape_rapidart, plot_matrices, [('run_info', 'run_info')])
         ])
@@ -242,8 +219,8 @@ def fsl_run_level_wf(model,
             (bdg, setup_susan, [('brain_mask', 'brain_mask')]),
             (get_tmean_img, setup_susan, [('out_file', 'mean_image')]),
             (apply_brainmask, run_susan, [('out_file', 'in_file')]),
-            (setup_susan, run_susan, [('brightness_threshold', 'brightness_threshold')]),
-            (setup_susan, run_susan, [('usans', 'usans')]),
+            (setup_susan, run_susan, [('brightness_threshold', 'brightness_threshold'),
+                                      ('usans', 'usans')]),
             (run_susan, apply_mask_smooth, [('smoothed_file', 'in_file')]),
             (bdg, apply_mask_smooth, [('brain_mask', 'in_file2')]),
             (apply_mask_smooth, specify_model, [('out_file', 'functional_runs')]),
@@ -259,12 +236,12 @@ def fsl_run_level_wf(model,
         (get_info, specify_model, [('repetition_time', 'time_repetition')]),
 
         (specify_model, fit_model, [('session_info', 'session_info')]),
-        (get_info, fit_model, [('repetition_time', 'interscan_interval')]),
-        (get_info, fit_model, [('run_contrasts', 'contrasts')]),
+        (get_info, fit_model, [('repetition_time', 'interscan_interval'),
+                               ('run_contrasts', 'contrasts')]),
 
-        (fit_model, first_level_design, [('interscan_interval', 'interscan_interval')]),
-        (fit_model, first_level_design, [('session_info', 'session_info')]),
-        (fit_model, first_level_design, [('contrasts', 'contrasts')]),
+        (fit_model, first_level_design, [('interscan_interval', 'interscan_interval'),
+                                         ('session_info', 'session_info'),
+                                         ('contrasts', 'contrasts')]),
 
         (first_level_design, generate_model, [('fsf_files', 'fsf_file')]),
         (first_level_design, generate_model, [('ev_files', 'ev_files')]),
@@ -282,32 +259,25 @@ def fsl_run_level_wf(model,
         ])
 
     workflow.connect([
-        #TODO: Wrap this in to get_info
-
         (get_info, plot_matrices, [('run_entities', 'entities')]),
         (generate_model, plot_matrices, [('con_file', 'con_file')]),
 
         (fit_model, estimate_model, [('functional_data', 'in_file')]),
         (generate_model, estimate_model, [('con_file', 'tcon_file')]),
 
+        (estimate_model, collate, [('copes', 'effect_maps'),
+                                   ('varcopes', 'variance_maps'),
+                                   ('tstats', 'tstat_maps'),
+                                   ('zstats', 'zscore_maps')]),
 
-        (get_info, produce_contrast_entities, [('run_entities', 'run_entities')]),
-        (get_info, produce_contrast_entities, [('run_contrasts', 'contrasts')]),
+        (get_info, collate_outputs, [('contrast_entities', 'entities')]),
+        (collate, collate_outputs, [('effect_maps', 'effect_maps'),
+                                    ('variance_maps', 'variance_maps'),
+                                    ('tstat_maps', 'tstat_maps'),
+                                    ('zscore_maps', 'zscore_maps')]),
 
-        (produce_contrast_entities, ds_effects, [('contrast_entities', 'entities')]),
-        (produce_contrast_entities, ds_variances, [('contrast_entities', 'entities')]),
-        (produce_contrast_entities, ds_zstats, [('contrast_entities', 'entities')]),
-        (produce_contrast_entities, ds_tstats, [('contrast_entities', 'entities')]),
-        (produce_contrast_entities, ds_fstats, [('contrast_entities', 'entities')]),
-        (estimate_model, ds_effects, [('copes', 'in_file')]),
-        (estimate_model, ds_variances, [('varcopes', 'in_file')]),
-        (estimate_model, ds_zstats, [('zstats', 'in_file')]),
-        (estimate_model, ds_tstats, [('tstats', 'in_file')]),
-        (estimate_model, ds_fstats, [('fstats', 'in_file')]),
-
-        (ds_effects, collate, [('effects', 'effect_maps')]),
-        (ds_variances, collate, [('variances', 'variance_maps')]),
-        #(ds_metadata, collate, [('metadata', 'metadata')])
+        (collate_outputs, ds_contrast_maps, [('out', 'in_file'),
+                                             ('metadata', 'entities')])
     ])
 
     return workflow
@@ -323,7 +293,7 @@ def fsl_higher_level_wf(output_dir,
                         smoothing_fwhm=None,
                         smoothing_level=None,
                         smoothing_type=None,
-                        name=None):
+                        name='fsl_higher_level_wf'):
     """
     This workflow generates processes functional_data across a single session (read: between runs)
     and computes effects, variances, residuals and statmaps
@@ -335,8 +305,10 @@ def fsl_higher_level_wf(output_dir,
     workflow.base_dir = work_dir
     workflow.desc = ""
 
-
-
+    level = model['Level']
+    get_info = pe.Node(
+        GenerateHigherInfo(),
+        name=f'get_{level}_info')
     if smoothing_level == 'l2':
         pass
     '''
