@@ -50,7 +50,6 @@ def get_smoothing_info_fsl(func, brain_mask, mean_image):
     return usans, btthresh
 
 def get_entities(run_entities, contrasts):
-    from bids.layout import parse_file_entities
     contrast_entities = []
     contrast_names = [contrast[0] for contrast in contrasts]
     for contrast_name in contrast_names:
@@ -63,15 +62,17 @@ def snake_to_camel(string):
     words = string.replace('.', '').split('_')
     return words[0] + ''.join(word.title() for word in words[1:])
 
-def reshape_ra(run_info, metadata, outlier_files):
+def reshape_ra(run_info, func, outlier_files):
     import pandas as pd
     import numpy as np
+    import nibabel as nb
     from nipype.interfaces.base import Bunch
     run_dict = run_info.dictcopy()
+    ntimepoints = nb.load(func).get_data().shape[-1]
     outlier_frame = pd.read_csv(outlier_files, header=None, names=['outlier_index'])
     for i, row in outlier_frame.iterrows():
         run_dict['regressor_names'].append(f'rapidart{i:02d}')
-        ra_col = np.zeros(metadata['NumTimepoints'])
+        ra_col = np.zeros(ntimepoints)
         ra_col[row['outlier_index']] = 1
         run_dict['regressors'].append(ra_col)
     run_info = Bunch(**run_dict)

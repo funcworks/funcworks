@@ -4,7 +4,8 @@ from pathlib import Path
 from copy import deepcopy
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from .. import __version__
-from .fsl import fsl_first_level_wf#, fsl_session_level_wf
+from .fsl import fsl_run_level_wf, fsl_higher_level_wf
+flatten = lambda x: x[0]
 def init_funcworks_wf(model_file,
                       bids_dir,
                       output_dir,
@@ -15,7 +16,8 @@ def init_funcworks_wf(model_file,
                       derivatives,
                       run_uuid,
                       use_rapidart,
-                      detrend_poly):
+                      detrend_poly,
+                      align_volumes):
 
     with open(model_file, 'r') as read_mdl:
         model = json.load(read_mdl)
@@ -55,6 +57,7 @@ def init_funcworks_wf(model_file,
                                                       derivatives=derivatives,
                                                       use_rapidart=use_rapidart,
                                                       detrend_poly=detrend_poly,
+                                                      align_volumes=align_volumes,
                                                       name=f'single_subject_{subject_id}_wf')
         crash_dir = (Path(output_dir) / 'funcworks' / 'logs' /
                      model['Name'] / f'sub-{subject_id}' / run_uuid)
@@ -81,43 +84,50 @@ def init_funcworks_subject_wf(model,
                               derivatives,
                               use_rapidart,
                               detrend_poly,
+                              align_volumes,
                               name):
 
-    funcworks_single_subject_wf = Workflow(name=name)
+    workflow = Workflow(name=name)
     #stage = None
     for step in model['Steps']:
-        if step['Level'] == 'run':
-            #stage = 'run'
-            run_model = fsl_first_level_wf(model=model,
-                                           step=step,
-                                           bids_dir=bids_dir,
-                                           output_dir=output_dir,
-                                           work_dir=work_dir,
-                                           subject_id=subject_id,
-                                           smoothing_fwhm=smoothing_fwhm,
-                                           smoothing_level=smoothing_level,
-                                           smoothing_type=smoothing_type,
-                                           derivatives=derivatives,
-                                           use_rapidart=use_rapidart,
-                                           detrend_poly=detrend_poly)
-            funcworks_single_subject_wf.add_nodes([run_model])
+        level = step['Level']
+        if level == 'run':
+            model = fsl_run_level_wf(model=model,
+                                     step=step,
+                                     bids_dir=bids_dir,
+                                     output_dir=output_dir,
+                                     work_dir=work_dir,
+                                     subject_id=subject_id,
+                                     smoothing_fwhm=smoothing_fwhm,
+                                     smoothing_level=smoothing_level,
+                                     smoothing_type=smoothing_type,
+                                     derivatives=derivatives,
+                                     use_rapidart=use_rapidart,
+                                     detrend_poly=detrend_poly,
+                                     align_volumes=align_volumes,
+                                     name=f'fsl_run_level_wf')
 
-
-        elif step == 'session':
-            raise NotImplementedError(f'{step} level processing not currently implemented')
         else:
-            raise ValueError(f'Unknown analyis level {step}')
+            model = fsl_higher_level_wf(step=step,
+                                        output_dir=output_dir,
+                                        work_dir=work_dir,
+                                        smoothing_fwhm=smoothing_fwhm,
+                                        smoothing_level=smoothing_level,
+                                        smoothing_type=smoothing_type,
+                                        name=f'fsl_{level}_level_wf')
 
-        '''
-            session_model = fsl_session_level_wf(model=model,
-                                                 step=step,
-                                                 bids_dir=bids_dir,
-                                                 output_dir=output_dir,
-                                                 work_dir=work_dir,
-                                                 subject_id=subject_id,
-                                                 derivatives=derivatives)
-            funcworks_single_subject_wf.add_nodes([session_model])
-        '''
-        if step == analysis_level:
+            workflow.connect([
+                (stage, model,
+                 [(f'collate_{pre_level}_outputs.out',
+                   f'get_{level}_info.contrast_maps'),
+                  (f'collate_{pre_level}_outputs.metadata',
+                   f'get_{level}_info.contrast_metadata'),
+                  ((f'bdg.brain_mask', flatten),
+                   f'estimate_{level}_model.mask_file')])
+            ])
+
+        stage = model
+        pre_level = level
+        if level == analysis_level:
             break
-    return funcworks_single_subject_wf
+    return workflow
