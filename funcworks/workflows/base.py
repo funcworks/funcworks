@@ -115,7 +115,6 @@ def init_funcworks_subject_wf(model,
                                         smoothing_level=smoothing_level,
                                         smoothing_type=smoothing_type,
                                         name=f'fsl_{level}_level_wf')
-            workflow.add_nodes([model])
             workflow.connect([
                 (stage, model,
                  [(f'collate_{pre_level}_outputs.out',
@@ -125,6 +124,8 @@ def init_funcworks_subject_wf(model,
                   ((f'bdg.brain_mask', flatten),
                    f'estimate_{level}_model.mask_file')])
             ])
+            workflow.add_nodes([model])
+
 
         stage = model
         pre_level = level
