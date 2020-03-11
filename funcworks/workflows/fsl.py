@@ -32,7 +32,6 @@ def fsl_run_level_wf(model,
     the model file
 
     """
-    flatten = lambda x: x[0]
     bids_dir = Path(bids_dir)
     work_dir = Path(work_dir)
     workflow = pe.Workflow(name=name)
@@ -200,12 +199,15 @@ def fsl_run_level_wf(model,
         run_without_submitting=True,
         name=f'ds_{level}_contrast_maps')
 
+    wrangle_outputs = pe.Node(
+        IdentityInterface(fields=['contrast_metadata', 'contrast_maps', 'brain_mask']),
+        name=f'wrangle_{level}_outputs')
     #Setup connections among nodes
     workflow.connect([
         (bdg, realign_runs, [('func', 'in_file'),
-                             (('bold_ref', flatten), 'ref_file')]),
+                             (('bold_ref', _pop), 'ref_file')]),
         (realign_runs, apply_brainmask, [('out_file', 'in_file')]),
-        (bdg, apply_brainmask, [(('brain_mask', flatten), 'in_file2')]),
+        (bdg, apply_brainmask, [(('brain_mask', _pop), 'in_file2')]),
         (bdg, get_info, [('func', 'functional_file'),
                          ('events', 'events_file')])
     ])
@@ -214,7 +216,7 @@ def fsl_run_level_wf(model,
         workflow.connect([
             (get_info, run_rapidart,
              [('motion_parameters', 'realignment_parameters')]),
-            (bdg, run_rapidart, [(('brain_mask', flatten), 'mask_file')]),
+            (bdg, run_rapidart, [(('brain_mask', _pop), 'mask_file')]),
             (realign_runs, run_rapidart, [('out_file', 'realigned_files')]),
             (run_rapidart, reshape_rapidart, [('outlier_files', 'outlier_files')]),
             (get_info, reshape_rapidart, [('run_info', 'run_info')]),
@@ -232,13 +234,13 @@ def fsl_run_level_wf(model,
         workflow.connect([
             (apply_brainmask, get_tmean_img, [('out_file', 'in_file')]),
             (apply_brainmask, setup_susan, [('out_file', 'func')]),
-            (bdg, setup_susan, [(('brain_mask', flatten), 'brain_mask')]),
+            (bdg, setup_susan, [(('brain_mask', _pop), 'brain_mask')]),
             (get_tmean_img, setup_susan, [('out_file', 'mean_image')]),
             (apply_brainmask, run_susan, [('out_file', 'in_file')]),
             (setup_susan, run_susan, [('brightness_threshold', 'brightness_threshold'),
                                       ('usans', 'usans')]),
             (run_susan, apply_mask_smooth, [('smoothed_file', 'in_file')]),
-            (bdg, apply_mask_smooth, [(('brain_mask', flatten), 'in_file2')]),
+            (bdg, apply_mask_smooth, [(('brain_mask', _pop), 'in_file2')]),
             (apply_mask_smooth, specify_model, [('out_file', 'functional_runs')]),
             (apply_mask_smooth, fit_model, [('out_file', 'functional_data')])
         ])
@@ -295,6 +297,10 @@ def fsl_run_level_wf(model,
 
         (collate_outputs, ds_contrast_maps, [('out', 'in_file'),
                                              ('metadata', 'entities')]),
+
+        (collate_outputs, wrangle_outputs, [('metadata', 'contrast_metadata'),
+                                            ('out', 'contrast_maps')]),
+        (bdg, wrangle_outputs, [(('brain_mask', _pop), 'brain_mask')])
     ])
 
     return workflow
@@ -324,6 +330,10 @@ def fsl_higher_level_wf(output_dir,
                      '[sub-{subject}_][ses-{session}_]task-{task}[_acq-{acquisition}]'
                      '[_rec-{reconstruction}][_echo-{echo}][_space-{space}]'
                      '_contrast-{contrast}_stat-{stat<effect|variance|z|p|t|F>}_statmap.nii.gz')
+
+    wrangle_inputs = pe.Node(
+        IdentityInterface(fields=['contrast_metadata', 'contrast_maps', 'brain_mask']),
+        name=f'wrangle_{level}_inputs')
 
     get_info = pe.Node(
         GenerateHigherInfo(model=step),
@@ -362,14 +372,21 @@ def fsl_higher_level_wf(output_dir,
         run_without_submitting=True,
         name=f'ds_{level}_contrast_maps')
 
+    wrangle_outputs = pe.Node(
+        IdentityInterface(fields=['contrast_metadata', 'contrast_maps', 'brain_mask']),
+        name=f'wrangle_{level}_outputs')
+
     workflow.connect([
+        (wrangle_inputs, get_info, [('contrast_metadata', 'contrast_metadata'),
+                                    ('contrast_maps', 'contrast_maps')]),
+
         (get_info, estimate_model, [('design_matrices', 'design_file'),
                                     ('contrast_matrices', 't_con_file'),
                                     ('covariance_matrices', 'cov_split_file'),
                                     ('dof_maps', 'dof_var_cope_file'),
                                     ('variance_maps', 'var_cope_file'),
                                     ('effect_maps', 'cope_file')]),
-
+        (wrangle_inputs, estimate_model, [('brain_mask', 'mask_file')]),
         (estimate_model, collate, [('copes', 'effect_maps'),
                                    ('var_copes', 'variance_maps'),
                                    ('tstats', 'tstat_maps'),
@@ -385,7 +402,14 @@ def fsl_higher_level_wf(output_dir,
 
         (collate_outputs, ds_contrast_maps, [('out', 'in_file'),
                                              ('metadata', 'entities')]),
-
+        (collate_outputs, wrangle_outputs, [('metadata', 'contrast_metadata'),
+                                            ('out', 'contrast_maps')])
     ])
 
     return workflow
+
+
+def _pop(inlist):
+    if isinstance(inlist, (list, tuple)):
+        return inlist[0]
+    return inlist

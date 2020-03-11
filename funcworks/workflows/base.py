@@ -5,7 +5,7 @@ from copy import deepcopy
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from .. import __version__
 from .fsl import fsl_run_level_wf, fsl_higher_level_wf
-flatten = lambda x: x[0]
+
 def init_funcworks_wf(model_file,
                       bids_dir,
                       output_dir,
@@ -117,18 +117,21 @@ def init_funcworks_subject_wf(model,
                                         name=f'fsl_{level}_level_wf')
             workflow.connect([
                 (stage, model,
-                 [(f'collate_{pre_level}_outputs.out',
-                   f'get_{level}_info.contrast_maps'),
-                  (f'collate_{pre_level}_outputs.metadata',
-                   f'get_{level}_info.contrast_metadata'),
-                  ((f'bdg.brain_mask', flatten),
-                   f'estimate_{level}_model.mask_file')])
+                 [(f'wrangle_{pre_level}_outputs.contrast_maps',
+                   f'wrangle_{level}_inputs.contrast_maps'),
+                  (f'wrangle_{pre_level}_outputs.contrast_metadata',
+                   f'wrangle_{level}_inputs.contrast_metadata'),
+                  (f'wrangle_{pre_level}_outputs.brain_mask',
+                   f'wrangle_{level}_inputs.brain_mask')])
             ])
-            workflow.add_nodes([model])
-
 
         stage = model
         pre_level = level
         if level == analysis_level:
             break
     return workflow
+
+def _pop(inlist):
+    if isinstance(inlist, (list, tuple)):
+        return inlist[0]
+    return inlist
