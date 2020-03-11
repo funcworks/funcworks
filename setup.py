@@ -1,8 +1,8 @@
 from setuptools import setup, find_packages
-
+from funcworks import __version__
 setup(
     name='funcworks',
-    version='0.0.1a'
+    version=__version__,
     packages=find_packages(),
     entry_points={'console_scripts': [
         'funcworks=funcworks.cli.run:main'
