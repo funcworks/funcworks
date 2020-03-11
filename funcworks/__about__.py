@@ -1,1 +1,4 @@
-__version__ = '0.0.0'
+'''
+Version information
+'''
+__version__ = '0.0.1a'

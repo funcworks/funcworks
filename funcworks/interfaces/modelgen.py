@@ -1,5 +1,6 @@
 # pylint: disable=C0415,C0114,C0115,W0404,W0621,W0612
 from pathlib import Path
+from bids.layout.writing import build_path
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec, Bunch, TraitedSpec,
     InputMultiPath, OutputMultiPath, File,
@@ -37,7 +38,7 @@ class GetRunModelInfo(IOBase):
     input_spec = GetRunModelInfoInputSpec
     output_spec = GetRunModelInfoOutputSpec
 
-    _always_run = True
+    #_always_run = True
 
     def _list_outputs(self):
         import json
@@ -47,7 +48,7 @@ class GetRunModelInfo(IOBase):
 
         with open(meta_file, 'r') as meta_read:
             metadata = json.load(meta_read)
-        metadata.update({'NumTimepoints': nb.load(self.inputs.functional_file).shape[3]})
+        entities.update({'Volumes': nb.load(self.inputs.functional_file).shape[3]})
         run_info, event_regs, confound_regs = self._get_model_info(
             regressors_file=regressors_file)
         run_conts, contrast_names = self._get_contrasts(event_names=event_regs)
@@ -55,6 +56,9 @@ class GetRunModelInfo(IOBase):
         contrast_entities = self._get_entities(
             contrasts=run_conts, run_entities=entities)
         detrend_poly = self.inputs.detrend_poly
+        entities.update({'Volumes': nb.load(self.inputs.functional_file).shape[3],
+                         'DegreesOfFreedom' : len(event_regs + confound_regs)})
+
         if detrend_poly:
             polynomial_names, polynomial_arrays = \
                 self._detrend_polynomial(regressors_file, detrend_poly)
@@ -211,59 +215,160 @@ class GetRunModelInfo(IOBase):
         return poly_names, poly_arrays
 
 class GenerateHigherInfoInputSpec(BaseInterfaceInputSpec):
-    effects = InputMultiPath(desc='Effect Maps from earlier level')
-    variances = InputMultiPath(desc='Variance Maps from earlier level')
-    metadata = InputMultiPath(desc='Metadata Maps from earlier level')
-    step_info = traits.Dict(desc='Step info from model file')
-    contrast_names = traits.Dict(desc='Contrast names inherited from previous levels')
+    contrast_maps = InputMultiPath(File(exists=True),
+                                   desc='List of contrasts statmaps from previous level')
+    contrast_metadata = InputMultiPath(
+        traits.Dict(desc='Contrast names inherited from previous levels'))
+    model = traits.Dict(desc='Step level information from the model file')
 
 class GenerateHigherInfoOutputSpec(TraitedSpec):
-    design_files = OutputMultiPath(File, desc='Design Matrix Files')
-    contrast_files = OutputMultiPath(File, desc='Contrast Matrix Files')
-    group_files = OutputMultiPath(File, desc=' Group Matrix Files')
-    cope_files = OutputMultiPath(File, desc='Combined Contrast Parameter Files')
-    variance_files = OutputMultiPath(File, desc='Combined Variance Files')
-    dof_files = OutputMultiPath(File, desc='Combined DOF Files')
+    effect_maps = traits.List()
+    variance_maps = traits.List()
+    dof_maps = traits.List()
+    contrast_matrices = traits.List()
+    design_matrices = traits.List()
+    covariance_matrices = traits.List()
+    contrast_metadata = traits.List()
 
 class GenerateHigherInfo(IOBase):
-    inputspec = GenerateHigherInfoInputSpec
-    outputspec = GenerateHigherInfoOutputSpec
+    input_spec = GenerateHigherInfoInputSpec
+    output_spec = GenerateHigherInfoOutputSpec
 
     _always_run = True
 
     def _list_outputs(self):
-        return self
-        #return {
-        #    'design_files': design_files,
-        #    'contrast_files': contrast_files,
-        #    'group_files': group_files,
-        #    'cope_files': cope_files,
-        #    'variance_files': variance_files,
-        #    'dof_files': dof_files,
-        #    'entities': entities}
+        organization, dummy_contrasts = self._get_organization()
+        entities, effect_maps, variance_maps, dof_maps = \
+            self._merge_maps(organization, dummy_contrasts)
+        design_matrices, contrast_matrices, covariance_matrices = \
+            self._produce_matrices(entities=entities)
+        return {'effect_maps': effect_maps,
+                'variance_maps': variance_maps,
+                'dof_maps': dof_maps,
+                'contrast_metadata': entities,
+                'contrast_matrices': contrast_matrices,
+                'design_matrices': design_matrices,
+                'covariance_matrices': covariance_matrices}
 
-    def _produce_design_files(self):
-        from bids.layout import parse_file_entities
-        step_info = self.inputs.step_info
-        if "DummyContrasts" in step_info:
-            if 'Conditions' in step_info['DummyContrasts']:
-                dummy_contrasts = step_info['DummyContrasts']['Conditions']
+    def _get_organization(self):
+        model = self.inputs.model
+
+        contrast_zip = zip(self.inputs.contrast_maps,
+                           self.inputs.contrast_metadata)
+        organization = {}
+        #split_fields = []
+        if "Transformations" in model:
+            if model['Transformations']['Name'] == 'Split':
+                split_fields = []
+        for contrast_file, contrast_entities in contrast_zip:
+            if contrast_entities['contrast'] not in organization:
+                organization[contrast_entities['contrast']] = []
+            organization[contrast_entities['contrast']].append(
+                {'File': contrast_file, 'Metadata': contrast_entities})
+
+        #for split_field in split_fields:
+        #    pass
+        dummy_contrasts = []
+        if "DummyContrasts" in model:
+            if 'Conditions' in model['DummyContrasts']:
+                dummy_contrasts = model['DummyContrasts']['Conditions']
             else:
-                dummy_contrasts = self.inputs.contrast_names
-        contrast_files = []
-        cope_files = []
-        variance_files = []
-        dof_files = []
-        contrast_entities = []
-        step_info = self.inputs.step_info
-        for contrast in dummy_contrasts:
-            contrast_name = snake_to_camel(contrast)
-            cont_effects = [x for x in self.inputs.effects if contrast_name in x]
-            entities = parse_file_entities(cont_effects[0])
-            entities.pop('run', None)
-            cont_variance = [x for x in self.inputs.variances if contrast_name in x]
-            affine = nb.load(cont_effects[0]).affine
-            cont_effects = np.concatenate([nb.load(run) for run in cont_effects])
-            cont_variance = np.concatenate([nb.load(run) for run in cont_variance])
-            contrast_entities.append(entities.copy())
-            design_files.append(design)
+                dummy_contrasts = organization.keys()
+        return organization, dummy_contrasts
+
+    def _merge_maps(self, organization, dummy_contrasts):
+        effect_maps = []
+        variance_maps = []
+        dof_maps = []
+        contrast_metadata = []
+        num_copes = []
+        entities = []
+        for dcontrast in dummy_contrasts:
+            ceffect_maps = []
+            cvariance_maps = []
+            cdof_maps = []
+            for bids_info in organization[dcontrast]:
+                if 'stat' not in bids_info['Metadata']:
+                    continue
+                if bids_info['Metadata']['stat'] == 'effect':
+                    open_file = nb.load(bids_info['File'])
+                    affine = open_file.affine
+                    dof_file = np.ones_like(open_file.get_fdata())
+                    dof_file = nb.nifti1.Nifti1Image(dof_file, affine)
+                    ceffect_maps.append(open_file)
+                    cdof_maps.append(dof_file)
+                elif bids_info['Metadata']['stat'] == 'variance':
+                    open_file = nb.load(bids_info['File'])
+                    cvariance_maps.append(open_file)
+
+            ceffect_maps = nb.concat_images(ceffect_maps)
+            cvariance_maps = nb.concat_images(cvariance_maps)
+            cdof_maps = nb.concat_images(cdof_maps)
+            centities = bids_info['Metadata'].copy()
+            centities.pop('run', None)
+            centities.pop('stat', None)
+            centities.update({'numcopes': ceffect_maps.shape[-1]})
+            entities.append(centities)
+            ents = centities.copy()
+            ents.update({'contrast': snake_to_camel(centities['contrast'])})
+
+            merged_pattern = ('sub-{subject}[_ses-{session}]'
+                              '_contrast-{contrast}_stat-{stat}'
+                              '_desc-merged_statmap.nii.gz')
+            ents['stat'] = 'effect'
+            effects_path = Path.cwd() / build_path(ents, path_patterns=merged_pattern)
+            nb.nifti1.save(ceffect_maps, effects_path)
+            ents['stat'] = 'variance'
+            variance_path = Path.cwd() / build_path(ents, path_patterns=merged_pattern)
+            nb.nifti1.save(cvariance_maps, variance_path)
+            ents['stat'] = 'dof'
+            dof_path = Path.cwd() / build_path(ents, path_patterns=merged_pattern)
+            nb.nifti1.save(cdof_maps, dof_path)
+            effect_maps.append(str(effects_path))
+            variance_maps.append(str(variance_path))
+            dof_maps.append(str(dof_path))
+        return entities, effect_maps, variance_maps, dof_maps
+
+
+    def _produce_matrices(self, entities):
+        design_matrices = []
+        contrast_matrices = []
+        covariance_matrices = []
+        matrix_pattern = 'sub-{subject}[_ses-{session}]_contrast-{contrast}_desc-{desc}_design.mat'
+        for entity in entities:
+            ents = entity.copy()
+            numcopes = ents['numcopes']
+            ents['desc'] = 'contrast'
+            contrast = ents['contrast']
+            ents['contrast'] = snake_to_camel(entity['contrast'])
+
+            conpath = Path.cwd() / build_path(ents, path_patterns=matrix_pattern)
+            with open(conpath, 'a') as write_file:
+                write_file.writelines(f'/ContrastName1 {contrast}\n')
+                write_file.writelines(f'/NumWaves 1\n')
+                write_file.writelines(f'/NumPoints 1\n\n')
+                write_file.writelines('/Matrix\n')
+                write_file.writelines('1\n')
+
+            ents['desc'] = 'design'
+            despath = Path.cwd() / build_path(ents, path_patterns=matrix_pattern)
+            with open(despath, 'a') as write_file:
+                write_file.writelines(f'/NumWaves 1\n')
+                write_file.writelines(f'/NumPoints {numcopes}\n')
+                write_file.writelines('/PPHeights 1\n\n')
+                write_file.writelines('/Matrix\n')
+                for _ in range(numcopes):
+                    write_file.writelines('1\n')
+
+            ents['desc'] = 'covariance'
+            covpath = Path.cwd() / build_path(ents, path_patterns=matrix_pattern)
+            with open(covpath, 'a') as write_file:
+                write_file.writelines(f'/NumWaves 1\n')
+                write_file.writelines(f'/NumPoints {numcopes}\n\n')
+                write_file.writelines('/Matrix\n')
+                for _ in range(numcopes):
+                    write_file.writelines('1\n')
+            design_matrices.append(str(despath))
+            contrast_matrices.append(str(conpath))
+            covariance_matrices.append(str(covpath))
+        return design_matrices, contrast_matrices, covariance_matrices

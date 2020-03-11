@@ -1,4 +1,4 @@
-# pylint: disable=C0415,C0114,C0115,W0404,W0621,W0612
+# pylint: disable=W0404,W0621,W0612,C0111
 from nipype.interfaces.base import (
     isdefined, DynamicTraitedSpec, traits, TraitedSpec, SimpleInterface)
 from nipype.interfaces.io import IOBase, add_traits
@@ -7,7 +7,7 @@ class MergeAll(IOBase):
     input_spec = DynamicTraitedSpec
     output_spec = DynamicTraitedSpec
 
-    def __init__(self, fields=None, check_lengths=True):
+    def __init__(self, fields=None, check_lengths=False):
         super(MergeAll, self).__init__()
         self._check_lengths = check_lengths
         self._lengths = None
@@ -33,10 +33,13 @@ class MergeAll(IOBase):
         for key in self._fields:
             val = getattr(self.inputs, key)
             # Allow for empty inputs
-            if isdefined(val):
+            if isdefined(val) and isinstance(val[0], list):
                 if self._check_lengths is True:
                     self._calculate_length(val)
                 outputs[key] = [elem for sublist in val for elem in sublist]
+            else:
+                outputs[key] = val
+
         self._lengths = None
 
         return outputs
@@ -68,17 +71,17 @@ class CollateWithMetadata(SimpleInterface):
     def _run_interface(self, runtime):
         orig_metadata = self.inputs.metadata
         md_map = self.inputs.field_to_metadata_map
-        n = len(orig_metadata)
+        meta_len = len(orig_metadata)
 
         self._results.update({'metadata': [], 'out': []})
         for key in self._fields:
             val = getattr(self.inputs, key)
             # Allow for missing values
             if isdefined(val):
-                if len(val) != n:
+                if len(val) != meta_len:
                     raise ValueError(f"List lengths must match metadata. Failing list: {key}")
-                for md, obj in zip(orig_metadata, val):
-                    metadata = md.copy()
+                for m_data, obj in zip(orig_metadata, val):
+                    metadata = m_data.copy()
                     metadata.update(md_map.get(key, {}))
                     self._results['metadata'].append(metadata)
                     self._results['out'].append(obj)

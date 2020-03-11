@@ -69,6 +69,8 @@ def get_parser():
                         help='nipype plugin configuration file')
     parser.add_argument('--detrend-poly', action='store', default=None, type=int,
                         help='Legendre polynomials to use for temporal filtering')
+    parser.add_argument('--align-volumes', action='store', default=None, type=int,
+                        help='Bold reference to align timeseries')
     return parser
 
 def main():
@@ -90,8 +92,6 @@ def main():
     if opts.analysis_level not in ['run', 'session', 'participant', 'dataset']:
         raise ValueError((f'Unknown analysis level {opts.analysis_level}',
                           "analysis level must be 'run', 'session', 'participant', 'dataset'"))
-    if opts.analysis_level not in ['run']:
-        raise NotImplementedError((f'{opts.analysis_level} not yet implemented'))
     with Manager() as mgr:
         retval = mgr.dict()
 
@@ -298,7 +298,8 @@ def build_workflow(opts, retval):
                                            derivatives=opts.derivatives,
                                            run_uuid=run_uuid,
                                            use_rapidart=opts.use_rapidart,
-                                           detrend_poly=opts.detrend_poly)
+                                           detrend_poly=opts.detrend_poly,
+                                           align_volumes=opts.align_volumes)
     retval['return_code'] = 0
 
     #logs_path = Path(output_dir) / 'funcworks' / 'logs'

@@ -5,7 +5,7 @@ from copy import deepcopy
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from .. import __version__
 from .fsl import fsl_run_level_wf, fsl_higher_level_wf
-
+flatten = lambda x: x[0]
 def init_funcworks_wf(model_file,
                       bids_dir,
                       output_dir,
@@ -16,7 +16,8 @@ def init_funcworks_wf(model_file,
                       derivatives,
                       run_uuid,
                       use_rapidart,
-                      detrend_poly):
+                      detrend_poly,
+                      align_volumes):
 
     with open(model_file, 'r') as read_mdl:
         model = json.load(read_mdl)
@@ -56,6 +57,7 @@ def init_funcworks_wf(model_file,
                                                       derivatives=derivatives,
                                                       use_rapidart=use_rapidart,
                                                       detrend_poly=detrend_poly,
+                                                      align_volumes=align_volumes,
                                                       name=f'single_subject_{subject_id}_wf')
         crash_dir = (Path(output_dir) / 'funcworks' / 'logs' /
                      model['Name'] / f'sub-{subject_id}' / run_uuid)
@@ -82,6 +84,7 @@ def init_funcworks_subject_wf(model,
                               derivatives,
                               use_rapidart,
                               detrend_poly,
+                              align_volumes,
                               name):
 
     workflow = Workflow(name=name)
@@ -101,35 +104,30 @@ def init_funcworks_subject_wf(model,
                                      derivatives=derivatives,
                                      use_rapidart=use_rapidart,
                                      detrend_poly=detrend_poly,
-                                     name=f'fsl_{level}_level_wf')
+                                     align_volumes=align_volumes,
+                                     name=f'fsl_run_level_wf')
 
-        #elif level != 'run':
-        #    raise NotImplementedError(f'{step} level processing not currently implemented')
         else:
-            model = fsl_higher_level_wf(model=model,
-                                        step=step,
-                                        bids_dir=bids_dir,
+            model = fsl_higher_level_wf(step=step,
                                         output_dir=output_dir,
                                         work_dir=work_dir,
-                                        subject_id=subject_id,
                                         smoothing_fwhm=smoothing_fwhm,
                                         smoothing_level=smoothing_level,
                                         smoothing_type=smoothing_type,
-                                        derivatives=derivatives,
                                         name=f'fsl_{level}_level_wf')
 
             workflow.connect([
                 (stage, model,
-                 [('collate.outputs.effect_maps', 'get_info.inputs.effect_maps')]),
-                (stage, model,
-                 [('collate.outputs.variance_maps', 'get_info.inputs.variance_maps')]),
-                (stage, model,
-                 [('collate.outputs.contrast_metadata', 'get_info.inputs.metadata')]),
-                (stage, model,
-                 ['get_info.outputs.contrast_names', 'get_info.inputs.contrast_names'])
+                 [(f'collate_{pre_level}_outputs.out',
+                   f'get_{level}_info.contrast_maps'),
+                  (f'collate_{pre_level}_outputs.metadata',
+                   f'get_{level}_info.contrast_metadata'),
+                  ((f'bdg.brain_mask', flatten),
+                   f'estimate_{level}_model.mask_file')])
             ])
-        workflow.add_nodes([model])
+
         stage = model
+        pre_level = level
         if level == analysis_level:
             break
     return workflow

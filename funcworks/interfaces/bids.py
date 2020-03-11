@@ -85,7 +85,7 @@ class BIDSDataSink(IOBase):
     def _list_outputs(self):
         from bids.layout.writing import build_path
         base_dir = Path(self.inputs.base_directory)
-        base_dir.mkdir(exist_ok=True, parents=True)
+        base_dir.mkdir(exist_ok=True, parents=True) #pylint: disable=E1123
 
         path_patterns = self.inputs.path_patterns
         if not isdefined(path_patterns):
