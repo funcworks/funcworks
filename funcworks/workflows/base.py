@@ -106,6 +106,7 @@ def init_funcworks_subject_wf(model,
                                      detrend_poly=detrend_poly,
                                      align_volumes=align_volumes,
                                      name=f'fsl_run_level_wf')
+            workflow.add_nodes([model])
         else:
             model = fsl_higher_level_wf(step=step,
                                         output_dir=output_dir,

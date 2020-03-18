@@ -133,17 +133,9 @@ RUN conda create -y -q --name neuro python=3 \
                                     traits=4.6.0 \
     && sync && conda clean -tipsy && sync \
     && /bin/bash -c "source activate neuro \
-      && pip install git+git://github.com/FIU-Neuro/dcmstack \
-      && pip install numpy pandas pybids==0.10.1 nibabel pydicom python-dateutil niworkflows nipype==1.4.2 traits==5.2.0 \
-      && pip install git+git://github.com/nipy/heudiconv" \
+      && pip install numpy pandas pybids==0.10.1 nibabel python-dateutil niworkflows nipype==1.4.2 traits==5.2.0" \
     && sync \
     && sed -i '$isource activate neuro' $ND_ENTRYPOINT
-
-#---------------
-# BIDS-validator
-#---------------
-RUN npm install -g bids-validator@1.3.0
-
 
 RUN apt-get update -qq && apt-get install -yq --no-install-recommends dirmngr gnupg \
     && apt-get clean \
