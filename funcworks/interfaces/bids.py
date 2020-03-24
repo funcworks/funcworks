@@ -1,20 +1,25 @@
 """
 General BIDS interfaces
 """
-#pylint: disable=W0703,C0115
-import os
+#pylint: disable=W0703,C0115,C0415
 import shutil
 from pathlib import Path
 from gzip import GzipFile
+import json
+from nipype import logging
 from nipype.utils.filemanip import copyfile
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec, TraitedSpec,
     InputMultiPath, OutputMultiPath, File, Directory,
-    traits, isdefined
+    traits, isdefined, LibraryBaseInterface, Str,
+    DynamicTraitedSpec, Undefined
     )
 from nipype.interfaces.io import IOBase
 import nibabel as nb
 from ..utils import snake_to_camel
+
+iflogger = logging.getLogger("nipype.interface")
+
 
 def bids_split_filename(fname):
     """Split a filename into parts: path, base filename, and extension
@@ -35,23 +40,21 @@ def bids_split_filename(fname):
     """
     special_extensions = [
         ".R.surf.gii", ".L.surf.gii",
-        ".R.func.gii", ".L.func.gii",
+        ".L.func.gii", ".L.func.gii",
         ".nii.gz", ".tsv.gz",
-        ]
+    ]
+    file_path = Path(fname)
+    pth = str(file_path.parent.as_posix())
 
-    fname = Path(fname)
-    pth = fname.parent
-    fname = fname.name
-
+    fname = str(file_path.name)
     for special_ext in special_extensions:
         if fname.lower().endswith(special_ext.lower()):
-            ext_len = len(special_ext)
-            ext = fname[-ext_len:]
-            fname = fname[:-ext_len]
+            ext = special_ext
+            fname = fname[:-len(ext)]
             break
     else:
-        fname, ext = os.path.splitext(fname)
-
+        fname = file_path.stem
+        ext = file_path.suffix
     return pth, fname, ext
 
 class BIDSDataSinkInputSpec(BaseInterfaceInputSpec):
@@ -134,3 +137,139 @@ def _copy_or_convert(in_file, out_file):
         return
 
     raise RuntimeError("Cannot convert {} to {}".format(in_ext, out_ext))
+
+class BIDSDataGrabberInputSpec(DynamicTraitedSpec):
+    base_dir = Directory(exists=True, desc="Path to BIDS Directory.", mandatory=True)
+    database_path = Directory(exists=True, mandatory=True, desc="Path to BIDS Dataset DBCACHE")
+    output_query = traits.Dict(
+        key_trait=Str, value_trait=traits.Dict, desc="Queries for outfield outputs"
+    )
+    raise_on_empty = traits.Bool(
+        True,
+        usedefault=True,
+        desc="Generate exception if list is empty for a given field",
+    )
+    index_derivatives = traits.Any(
+        [traits.Bool, traits.Str, traits.List(Directory)],
+        default=False, mandatory=True, usedefault=True,
+        desc="Directory / List of Directories to Index, Otherwise no derivative indexing"
+             "Will occur"
+    )
+
+class BIDSDataGrabber(LibraryBaseInterface, IOBase):
+    """BIDS datagrabber module that wraps around pybids to allow arbitrary
+    querying of BIDS datasets.
+    Examples
+    --------
+    By default, the BIDSDataGrabber fetches anatomical and functional images
+    from a project, and makes BIDS entities (e.g. subject) available for
+    filtering outputs.
+    >>> bg = BIDSDataGrabber()
+    >>> bg.inputs.base_dir = 'ds005/'
+    >>> bg.inputs.subject = '01'
+    >>> results = bg.run() # doctest: +SKIP
+    Dynamically created, user-defined output fields can also be defined to
+    return different types of outputs from the same project. All outputs
+    are filtered on common entities, which can be explicitly defined as
+    infields.
+    >>> bg = BIDSDataGrabber(infields = ['subject'])
+    >>> bg.inputs.base_dir = 'ds005/'
+    >>> bg.inputs.subject = '01'
+    >>> bg.inputs.output_query['dwi'] = dict(datatype='dwi')
+    >>> results = bg.run() # doctest: +SKIP
+    """
+
+    input_spec = BIDSDataGrabberInputSpec
+    output_spec = DynamicTraitedSpec
+    _always_run = True
+    _pkg = "bids"
+
+    def __init__(self, infields=None, **kwargs):
+        """
+        Parameters
+        ----------
+        infields : list of str
+            Indicates the input fields to be dynamically created
+        """
+        super(BIDSDataGrabber, self).__init__(**kwargs)
+
+        if not isdefined(self.inputs.output_query):
+            self.inputs.output_query = {
+                "bold": {
+                    "datatype": "func",
+                    "suffix": "bold",
+                    "extensions": ["nii", ".nii.gz"],
+                },
+                "T1w": {
+                    "datatype": "anat",
+                    "suffix": "T1w",
+                    "extensions": ["nii", ".nii.gz"],
+                },
+            }
+
+        # If infields is empty, use all BIDS entities
+        if infields is None:
+            from bids import layout as bidslayout
+
+            bids_config = Path(bidslayout.__file__).parent / "config" / "bids.json"
+            bids_config = json.load(open(bids_config, "r"))
+            infields = [i["name"] for i in bids_config["entities"]]
+
+        self._infields = infields or []
+
+        # used for mandatory inputs check
+        undefined_traits = {}
+        for key in self._infields:
+            self.inputs.add_trait(key, traits.Any)
+            undefined_traits[key] = kwargs[key] if key in kwargs else Undefined
+
+        self.inputs.trait_set(trait_change_notify=False, **undefined_traits)
+
+    def _list_outputs(self):
+        from bids import BIDSLayout
+
+        layout = BIDSLayout(
+            self.inputs.base_dir, derivatives=self.inputs.index_derivatives,
+            database_file=self.inputs.database_path, reset_database=False
+        )
+
+        # If infield is not given nm input value, silently ignore
+        filters = {}
+        for key in self._infields:
+            value = getattr(self.inputs, key)
+            if isdefined(value):
+                filters[key] = value
+
+        outputs = {}
+        for key, query in self.inputs.output_query.items():
+            args = query.copy()
+            args.update(filters)
+            filelist = layout.get(return_type="file", **args)
+            if len(filelist) == 0:
+                msg = "Output key: %s returned no files" % key
+                if self.inputs.raise_on_empty:
+                    raise IOError(msg)
+                iflogger.warning(msg)
+                filelist = Undefined
+
+            outputs[key] = filelist
+        return outputs
+
+    def _add_output_traits(self, base):
+        return add_traits(base, list(self.inputs.output_query.keys()))
+
+def add_traits(base, names, trait_type=None):
+    """ Add traits to a traited class.
+    All traits are set to Undefined by default
+    """
+    if trait_type is None:
+        trait_type = traits.Any
+    undefined_traits = {}
+    for key in names:
+        base.add_trait(key, trait_type)
+        undefined_traits[key] = Undefined
+    base.trait_set(trait_change_notify=False, **undefined_traits)
+    # access each trait
+    for key in names:
+        _ = getattr(base, key)
+    return base

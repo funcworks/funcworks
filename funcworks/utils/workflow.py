@@ -105,3 +105,13 @@ def correct_matrix(design_matrix):
         sep='\t', line_terminator='\t\n',
         mode='a', header=None)
     return str(matrix_path)
+
+def reference_outputs(**args):
+    def _pop(inlist):
+        if isinstance(inlist, (list, tuple)) and len(inlist) == 1:
+            return inlist[0]
+        return inlist
+    popped_lists = {}
+    for arg in args:
+        popped_lists[arg] = _pop(args[arg])
+    return popped_lists['brain_mask'], popped_lists['bold_ref']

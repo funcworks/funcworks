@@ -1,7 +1,7 @@
 """
 Main run script
 """
-#pylint: disable=C0103,R0913,R0914,W0404,C0116,W0212,W0613,W0611,W1202
+#pylint: disable=C0103,R0913,R0914,W0404,C0116,W0212,W0613,W0611,W1202,C0415
 import os
 import gc
 import sys
@@ -70,7 +70,11 @@ def get_parser():
     parser.add_argument('--detrend-poly', action='store', default=None, type=int,
                         help='Legendre polynomials to use for temporal filtering')
     parser.add_argument('--align-volumes', action='store', default=None, type=int,
-                        help='Bold reference to align timeseries')
+                        help='Bold reference to align timeseries, this will override any '
+                             'run specific inputs in the model file for the boldref and brain_mask')
+    parser.add_argument('--database-path', action='store', default=None, type=Path,
+                        help='Path to existing directory containing BIDS Dataset Database files'
+                             'useful for speeding up run-time')
     return parser
 
 def main():
@@ -174,6 +178,21 @@ def build_workflow(opts, retval):
     retval['output_dir'] = output_dir
     retval['work_dir'] = work_dir
 
+    if not opts.database_path:
+        database_path = str(opts.work_dir.resolve() / 'dbcache')
+        layout = BIDSLayout(
+            bids_dir, derivatives=opts.derivatives, validate=True,
+            database_file=database_path,
+            reset_database=True
+        )
+    else:
+        database_path = opts.database_path
+        layout = BIDSLayout(
+            bids_dir, derivatives=opts.derivatives, validate=True,
+            database_file=database_path,
+            reset_database=False
+        )
+
     if output_dir == bids_dir:
         build_log.error(
             'The selected output folder is the same as the input BIDS folder. '
@@ -192,11 +211,11 @@ def build_workflow(opts, retval):
     # Set up some instrumental utilities
     run_uuid = '%s_%s' % (strftime('%Y%m%d-%H%M%S'), uuid.uuid4())
     retval['run_uuid'] = run_uuid
+
     if opts.participant_label:
         retval['participant_label'] = opts.participant_label
     else:
-        from bids import BIDSLayout
-        retval['participant_label'] = BIDSLayout(opts.bids_dir).get_subjects()
+        retval['participant_label'] = layout.get_subjects()
 
     # Load base plugin_settings from file if --use-plugin
     plugin_settings = {
@@ -292,6 +311,7 @@ def build_workflow(opts, retval):
                                            bids_dir=opts.bids_dir,
                                            output_dir=opts.output_dir,
                                            work_dir=opts.work_dir,
+                                           database_path=str(database_path),
                                            participants=retval['participant_label'],
                                            analysis_level=opts.analysis_level,
                                            smoothing=opts.smoothing,

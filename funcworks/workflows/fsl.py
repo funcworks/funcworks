@@ -4,10 +4,10 @@ Run and Session Level WFs in FSL
 #pylint: disable=R0913,R0914
 from pathlib import Path
 from nipype.pipeline import engine as pe
-from nipype.interfaces import fsl, io
+from nipype.interfaces import fsl
 from nipype.interfaces.utility import Function, IdentityInterface
 from nipype.algorithms import modelgen, rapidart as ra
-from ..interfaces.bids import (BIDSDataSink)
+from ..interfaces.bids import BIDSDataGrabber, BIDSDataSink
 from ..interfaces.modelgen import GetRunModelInfo, GenerateHigherInfo
 from ..interfaces.io import MergeAll, CollateWithMetadata
 from ..interfaces.visualization import PlotMatrices
@@ -20,6 +20,7 @@ def fsl_run_level_wf(model,
                      work_dir,
                      subject_id,
                      derivatives,
+                     database_path,
                      smoothing_fwhm=None,
                      smoothing_level=None,
                      smoothing_type=None,
@@ -48,14 +49,16 @@ def fsl_run_level_wf(model,
     event_entities = fixed_entities.copy()
     event_entities.pop('space', None)
     reference_entities = fixed_entities.copy()
-    reference_entities.pop('run', None)
+    if align_volumes:
+        reference_entities['run'] = align_volumes
     workflow.__desc__ = ""
     (work_dir / model['Name']).mkdir(exist_ok=True)
 
     bdg = pe.Node(
-        io.BIDSDataGrabber(
+        BIDSDataGrabber(
             base_dir=bids_dir, subject=subject_id,
-            extra_derivatives=derivatives, index_derivatives=True,
+            index_derivatives=derivatives,
+            database_path=database_path,
             output_query={'func': {**{'datatype':'func', 'desc':'preproc',
                                       'extension':'nii.gz', 'suffix':'bold'},
                                    **fixed_entities},
@@ -63,10 +66,9 @@ def fsl_run_level_wf(model,
                                         'extension':'tsv'},
                                      **event_entities},
                           'brain_mask': {**{'datatype': 'func', 'desc': 'brain',
-                                            'run': align_volumes,
                                             'extension': 'nii.gz', 'suffix':'mask'},
                                          **reference_entities},
-                          'bold_ref': {**{'datatype': 'func', 'run': align_volumes,
+                          'bold_ref': {**{'datatype': 'func',
                                           'extension': 'nii.gz', 'suffix':'boldref'},
                                        **reference_entities}}),
         name='bdg')
@@ -76,15 +78,32 @@ def fsl_run_level_wf(model,
         iterfield=['functional_file', 'events_file'],
         name='get_run_info')
 
+    reference_outputs = pe.Node(
+        Function(input_names=['brain_mask', 'bold_ref'],
+                 output_names=['brain_mask', 'bold_ref'],
+                 function=utils.reference_outputs),
+        name='reference_outputs')
+
     #Realign functional runs to the first functional run
+    if align_volumes:
+        realign_fields = ['in_file']
+        apply_bmsk = ['in_file']
+        susan_fields = ['func', 'mean_image']
+        apply_bmsk_smooth = ['in_file']
+    else:
+        realign_fields = ['in_file', 'bold_ref']
+        apply_bmsk = ['in_file', 'in_file2']
+        susan_fields = ['func', 'mean_image', 'brain_mask']
+        apply_bmsk_smooth = ['in_file', 'in_file2']
+
     realign_runs = pe.MapNode(
         fsl.MCFLIRT(interpolation='sinc'),
-        iterfield=['in_file'],
+        iterfield=realign_fields,
         name='realign_runs')
 
     apply_brainmask = pe.MapNode(
         fsl.ImageMaths(suffix='_bet', op_string='-mas'),
-        iterfield=['in_file'],
+        iterfield=apply_bmsk,
         name='apply_brainmask')
 
     specify_model = pe.MapNode(
@@ -148,7 +167,7 @@ def fsl_run_level_wf(model,
         Function(input_names=['func', 'brain_mask', 'mean_image'],
                  output_names=['usans', 'brightness_threshold'],
                  function=utils.get_smoothing_info_fsl),
-        iterfield=['func', 'mean_image'],
+        iterfield=susan_fields,
         name='setup_susan')
 
     run_susan = pe.MapNode(
@@ -158,7 +177,7 @@ def fsl_run_level_wf(model,
 
     apply_mask_smooth = pe.MapNode(
         fsl.ImageMaths(suffix='_bet', op_string='-mas'),
-        iterfield=['in_file'],
+        iterfield=apply_bmsk_smooth,
         name='apply_mask_smooth')
 
     #Exists solely to correct undesirable behavior of FSL
@@ -203,20 +222,21 @@ def fsl_run_level_wf(model,
         IdentityInterface(fields=['contrast_metadata', 'contrast_maps', 'brain_mask']),
         name=f'wrangle_{level}_outputs')
     #Setup connections among nodes
+
     workflow.connect([
-        (bdg, realign_runs, [('func', 'in_file'),
-                             (('bold_ref', _pop), 'ref_file')]),
+        (bdg, realign_runs, [('func', 'in_file')]),
+        (bdg, reference_outputs, [('bold_ref', 'bold_ref'),
+                                  ('brain_mask', 'brain_mask')]),
+        (reference_outputs, realign_runs, [('bold_ref', 'ref_file')]),
         (realign_runs, apply_brainmask, [('out_file', 'in_file')]),
-        (bdg, apply_brainmask, [(('brain_mask', _pop), 'in_file2')]),
-        (bdg, get_info, [('func', 'functional_file'),
-                         ('events', 'events_file')])
+        (reference_outputs, apply_brainmask, [('brain_mask', 'in_file2')]),
+        (bdg, get_info, [('func', 'functional_file'), ('events', 'events_file')])
     ])
 
     if use_rapidart:
         workflow.connect([
-            (get_info, run_rapidart,
-             [('motion_parameters', 'realignment_parameters')]),
-            (bdg, run_rapidart, [(('brain_mask', _pop), 'mask_file')]),
+            (get_info, run_rapidart, [('motion_parameters', 'realignment_parameters')]),
+            (reference_outputs, run_rapidart, [('brain_mask', 'mask_file')]),
             (realign_runs, run_rapidart, [('out_file', 'realigned_files')]),
             (run_rapidart, reshape_rapidart, [('outlier_files', 'outlier_files')]),
             (get_info, reshape_rapidart, [('run_info', 'run_info')]),
@@ -234,13 +254,13 @@ def fsl_run_level_wf(model,
         workflow.connect([
             (apply_brainmask, get_tmean_img, [('out_file', 'in_file')]),
             (apply_brainmask, setup_susan, [('out_file', 'func')]),
-            (bdg, setup_susan, [(('brain_mask', _pop), 'brain_mask')]),
+            (reference_outputs, setup_susan, [('brain_mask', 'brain_mask')]),
             (get_tmean_img, setup_susan, [('out_file', 'mean_image')]),
             (apply_brainmask, run_susan, [('out_file', 'in_file')]),
             (setup_susan, run_susan, [('brightness_threshold', 'brightness_threshold'),
                                       ('usans', 'usans')]),
             (run_susan, apply_mask_smooth, [('smoothed_file', 'in_file')]),
-            (bdg, apply_mask_smooth, [(('brain_mask', _pop), 'in_file2')]),
+            (reference_outputs, apply_mask_smooth, [('brain_mask', 'in_file2')]),
             (apply_mask_smooth, specify_model, [('out_file', 'functional_runs')]),
             (apply_mask_smooth, fit_model, [('out_file', 'functional_data')])
         ])
@@ -300,7 +320,7 @@ def fsl_run_level_wf(model,
 
         (collate_outputs, wrangle_outputs, [('metadata', 'contrast_metadata'),
                                             ('out', 'contrast_maps')]),
-        (bdg, wrangle_outputs, [(('brain_mask', _pop), 'brain_mask')])
+        (reference_outputs, wrangle_outputs, [('brain_mask', 'brain_mask')])
     ])
 
     return workflow
@@ -407,9 +427,3 @@ def fsl_higher_level_wf(output_dir,
     ])
 
     return workflow
-
-
-def _pop(inlist):
-    if isinstance(inlist, (list, tuple)):
-        return inlist[0]
-    return inlist

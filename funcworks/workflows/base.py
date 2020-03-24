@@ -10,6 +10,7 @@ def init_funcworks_wf(model_file,
                       bids_dir,
                       output_dir,
                       work_dir,
+                      database_path,
                       participants,
                       analysis_level,
                       smoothing,
@@ -25,6 +26,7 @@ def init_funcworks_wf(model_file,
     funcworks_wf = Workflow(name='funcworks_wf')
     (work_dir / model['Name']).mkdir(exist_ok=True, parents=True)
     funcworks_wf.base_dir = work_dir / model['Name']
+
     if smoothing:
         smoothing_params = smoothing.split(':')
         if len(smoothing_params) == 1:
@@ -49,6 +51,7 @@ def init_funcworks_wf(model_file,
                                                                   'funcworks' /
                                                                   model['Name']),
                                                       work_dir=work_dir,
+                                                      database_path=database_path,
                                                       subject_id=subject_id,
                                                       analysis_level=analysis_level,
                                                       smoothing_fwhm=smoothing_fwhm,
@@ -76,6 +79,7 @@ def init_funcworks_subject_wf(model,
                               bids_dir,
                               output_dir,
                               work_dir,
+                              database_path,
                               subject_id,
                               analysis_level,
                               smoothing_fwhm,
@@ -97,6 +101,7 @@ def init_funcworks_subject_wf(model,
                                      bids_dir=bids_dir,
                                      output_dir=output_dir,
                                      work_dir=work_dir,
+                                     database_path=database_path,
                                      subject_id=subject_id,
                                      smoothing_fwhm=smoothing_fwhm,
                                      smoothing_level=smoothing_level,
