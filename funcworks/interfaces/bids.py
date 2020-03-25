@@ -230,7 +230,7 @@ class BIDSDataGrabber(LibraryBaseInterface, IOBase):
 
         layout = BIDSLayout(
             self.inputs.base_dir, derivatives=self.inputs.index_derivatives,
-            database_file=self.inputs.database_path, reset_database=False
+            database_path=self.inputs.database_path, reset_database=False
         )
 
         # If infield is not given nm input value, silently ignore
