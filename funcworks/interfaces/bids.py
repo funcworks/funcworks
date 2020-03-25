@@ -181,7 +181,7 @@ class BIDSDataGrabber(LibraryBaseInterface, IOBase):
 
     input_spec = BIDSDataGrabberInputSpec
     output_spec = DynamicTraitedSpec
-    _always_run = True
+    _always_run = False
     _pkg = "bids"
 
     def __init__(self, infields=None, **kwargs):
