@@ -78,7 +78,7 @@ def reshape_ra(run_info, func, outlier_files, contrast_entities):
     run_info = Bunch(**run_dict)
     for contrast_ents in contrast_entities:
         contrast_ents.update({
-            'DegreesOfFreedom': len(run_info.events + run_info.regressor_names)
+            'DegreesOfFreedom': len(run_info.conditions + run_info.regressor_names)
         })
     return run_info, contrast_entities
 
