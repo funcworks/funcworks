@@ -35,19 +35,8 @@ def get_contrasts(step, include_contrasts):
                                   contrast['Weights']))
     return all_contrasts
 
-
-
-def get_smoothing_info_fsl(func, brain_mask, mean_image):
-    import nibabel as nb
-    import numpy as np
-    img = nb.load(func)
-    img_data = img.get_fdata()
-    mask_img_data = nb.load(brain_mask).get_fdata()
-    img_median = np.median(img_data[mask_img_data > 0])
-    btthresh = img_median * 0.75
-    usans = [tuple([mean_image, btthresh])]
-
-    return usans, btthresh
+def get_btthresh(medianvals):
+    return [0.75 * val for val in medianvals]
 
 def get_entities(run_entities, contrasts):
     contrast_entities = []
@@ -56,6 +45,9 @@ def get_entities(run_entities, contrasts):
         run_entities.update({'contrast':contrast_name})
         contrast_entities.append(run_entities.copy())
     return contrast_entities
+
+def get_usans(central_val):
+    return [[tuple([val[0], 0.75 * val[1]])] for val in central_val]
 
 def snake_to_camel(string):
     string.replace('.', '_')
@@ -105,13 +97,3 @@ def correct_matrix(design_matrix):
         sep='\t', line_terminator='\t\n',
         mode='a', header=None)
     return str(matrix_path)
-
-def reference_outputs(**args):
-    def _pop(inlist):
-        if isinstance(inlist, (list, tuple)) and len(inlist) == 1:
-            return inlist[0]
-        return inlist
-    popped_lists = {}
-    for arg in args:
-        popped_lists[arg] = _pop(args[arg])
-    return popped_lists['brain_mask'], popped_lists['bold_ref']

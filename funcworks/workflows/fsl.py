@@ -5,7 +5,7 @@ Run and Session Level WFs in FSL
 from pathlib import Path
 from nipype.pipeline import engine as pe
 from nipype.interfaces import fsl
-from nipype.interfaces.utility import Function, IdentityInterface
+from nipype.interfaces.utility import Function, IdentityInterface, Merge
 from nipype.algorithms import modelgen, rapidart as ra
 from ..interfaces.bids import BIDSDataGrabber, BIDSDataSink
 from ..interfaces.modelgen import GetRunModelInfo, GenerateHigherInfo
@@ -44,13 +44,6 @@ def fsl_run_level_wf(model,
         dimensionality = 2
 
     fixed_entities = model['Input']['Include']
-    if 'space' not in fixed_entities:
-        fixed_entities['space'] = None
-    event_entities = fixed_entities.copy()
-    event_entities.pop('space', None)
-    reference_entities = fixed_entities.copy()
-    if align_volumes:
-        reference_entities['run'] = align_volumes
     workflow.__desc__ = ""
     (work_dir / model['Name']).mkdir(exist_ok=True)
 
@@ -61,55 +54,25 @@ def fsl_run_level_wf(model,
             database_path=database_path,
             output_query={'func': {**{'datatype':'func', 'desc':'preproc',
                                       'extension':'nii.gz', 'suffix':'bold'},
-                                   **fixed_entities},
-                          'events': {**{'datatype':'func', 'suffix':'events',
-                                        'extension':'tsv'},
-                                     **event_entities},
-                          'brain_mask': {**{'datatype': 'func', 'desc': 'brain',
-                                            'extension': 'nii.gz', 'suffix':'mask'},
-                                         **reference_entities},
-                          'bold_ref': {**{'datatype': 'func',
-                                          'extension': 'nii.gz', 'suffix':'boldref'},
-                                       **reference_entities}}),
-        name='bdg')
+                                   **fixed_entities}}),
+        name='func_select')
 
     get_info = pe.MapNode(
-        GetRunModelInfo(model=step, detrend_poly=detrend_poly),
-        iterfield=['functional_file', 'events_file'],
-        name='get_run_info')
-
-    reference_outputs = pe.Node(
-        Function(input_names=['brain_mask', 'bold_ref'],
-                 output_names=['brain_mask', 'bold_ref'],
-                 function=utils.reference_outputs),
-        name='reference_outputs')
-
-    #Realign functional runs to the first functional run
-    if align_volumes:
-        realign_fields = ['in_file']
-        apply_bmsk = ['in_file']
-        susan_fields = ['func', 'mean_image']
-        apply_bmsk_smooth = ['in_file']
-    else:
-        realign_fields = ['in_file', 'bold_ref']
-        apply_bmsk = ['in_file', 'in_file2']
-        susan_fields = ['func', 'mean_image', 'brain_mask']
-        apply_bmsk_smooth = ['in_file', 'in_file2']
+        GetRunModelInfo(
+            model=step, bids_dir=bids_dir,
+            detrend_poly=detrend_poly, align_volumes=align_volumes),
+        iterfield=['functional_file'],
+        name=f'get_{level}_info')
 
     realign_runs = pe.MapNode(
         fsl.MCFLIRT(interpolation='sinc'),
-        iterfield=realign_fields,
-        name='realign_runs')
-
-    apply_brainmask = pe.MapNode(
-        fsl.ImageMaths(suffix='_bet', op_string='-mas'),
-        iterfield=apply_bmsk,
-        name='apply_brainmask')
+        iterfield=['in_file', 'ref_file'],
+        name='func_realign')
 
     specify_model = pe.MapNode(
         modelgen.SpecifyModel(high_pass_filter_cutoff=-1.0, input_units='secs'),
         iterfield=['functional_runs', 'subject_info', 'time_repetition'],
-        name='specify_model')
+        name=f'model_{level}_specify')
 
     fit_model = pe.MapNode(
         IdentityInterface(fields=['session_info', 'interscan_interval',
@@ -117,26 +80,26 @@ def fsl_run_level_wf(model,
                           mandatory_inputs=True),
         iterfield=['functional_data', 'session_info',
                    'interscan_interval', 'contrasts'],
-        name='fit_model')
+        name=f'model_{level}_fit')
 
     first_level_design = pe.MapNode(
         fsl.Level1Design(bases={'dgamma':{'derivs': False}},
                          model_serial_correlations=False),
         iterfield=['session_info', 'interscan_interval', 'contrasts'],
-        name='first_level_design')
+        name=f'model_{level}_design')
 
     generate_model = pe.MapNode(
         fsl.FEATModel(environ={'FSLOUTPUTTYPE': 'NIFTI_GZ'},
                       output_type='NIFTI_GZ'),
         iterfield=['fsf_file', 'ev_files'],
-        name='generate_model')
+        name=f'model_{level}_generate')
 
     estimate_model = pe.MapNode(
         fsl.FILMGLS(environ={'FSLOUTPUTTYPE': 'NIFTI_GZ'}, mask_size=5, threshold=0.0,
                     output_type='NIFTI_GZ', results_dir='results', #smooth_autocorr=True
                     autocorr_noestimate=True),
         iterfield=['design_file', 'in_file', 'tcon_file'],
-        name='estimate_model')
+        name=f'estimate_{level}_model')
 
     image_pattern = ('[sub-{subject}/][ses-{session}/]'
                      '[sub-{subject}_][ses-{session}_]task-{task}[_acq-{acquisition}]'
@@ -148,37 +111,34 @@ def fsl_run_level_wf(model,
                           zintensity_threshold=3, norm_threshold=1,
                           bound_by_brainmask=True, mask_type='file',
                           parameter_source='FSL'),
-        iterfield=['realignment_parameters', 'realigned_files'],
-        name='run_rapidart')
+        iterfield=['realignment_parameters', 'realigned_files', 'mask_file'],
+        name='rapidart_run')
 
     reshape_rapidart = pe.MapNode(
         Function(input_names=['run_info', 'func', 'outlier_files'],
                  output_names=['run_info'],
                  function=utils.reshape_ra),
         iterfield=['outlier_files', 'run_info', 'func'],
-        name='reshape_rapidart')
+        name='rapidart_reshape')
 
-    get_tmean_img = pe.MapNode(
+    mean_img = pe.MapNode(
         fsl.ImageMaths(op_string='-Tmean', suffix='_mean'),
-        iterfield=['in_file'],
-        name='get_tmean_img')
+        iterfield=['in_file', 'mask_file'],
+        name='smooth_susan_avgimg')
 
-    setup_susan = pe.MapNode(
-        Function(input_names=['func', 'brain_mask', 'mean_image'],
-                 output_names=['usans', 'brightness_threshold'],
-                 function=utils.get_smoothing_info_fsl),
-        iterfield=susan_fields,
-        name='setup_susan')
+    median_img = pe.MapNode(
+        fsl.ImageStats(op_string='-k %s -p 50'),
+        iterfield=['in_file', 'mask_file'],
+        name='smooth_susan_medimg')
+
+    merge = pe.Node(
+        Merge(2, axis='hstack'),
+        name='smooth_merge')
 
     run_susan = pe.MapNode(
         fsl.SUSAN(fwhm=smoothing_fwhm, dimension=dimensionality),
         iterfield=['in_file', 'brightness_threshold', 'usans'],
-        name='run_susan')
-
-    apply_mask_smooth = pe.MapNode(
-        fsl.ImageMaths(suffix='_bet', op_string='-mas'),
-        iterfield=apply_bmsk_smooth,
-        name='apply_mask_smooth')
+        name='smooth_susan')
 
     #Exists solely to correct undesirable behavior of FSL
     #that results in loss of constant columns
@@ -187,12 +147,12 @@ def fsl_run_level_wf(model,
                  output_names=['design_matrix'],
                  function=utils.correct_matrix),
         iterfield=['design_matrix'],
-        name='correct_matrices')
+        name=f'correct_{level}_matrices')
 
     collate = pe.Node(
         MergeAll(['effect_maps', 'variance_maps', 'tstat_maps', 'zscore_maps', 'contrast_metadata'],
                  check_lengths=True),
-        name='collate_run_level')
+        name=f'collate_{level}')
 
     collate_outputs = pe.Node(
         CollateWithMetadata(
@@ -204,14 +164,14 @@ def fsl_run_level_wf(model,
                 'zscore_maps': {'stat': 'z'},
                 'tstat_maps': {'stat' : 't'}
             }),
-        name=f'collate_run_outputs')
+        name=f'collate_{level}_outputs')
 
     plot_matrices = pe.MapNode(
         PlotMatrices(output_dir=output_dir),
         iterfield=['mat_file', 'con_file', 'entities', 'run_info'],
-        name='plot_matrices')
+        name=f'plot_{level}_matrices')
 
-    ds_contrast_maps = pe.Node(
+    ds_contrast_maps = pe.MapNode(
         BIDSDataSink(base_directory=output_dir,
                      path_patterns=image_pattern),
         iterfield=['entities', 'in_file'],
@@ -225,18 +185,14 @@ def fsl_run_level_wf(model,
 
     workflow.connect([
         (bdg, realign_runs, [('func', 'in_file')]),
-        (bdg, reference_outputs, [('bold_ref', 'bold_ref'),
-                                  ('brain_mask', 'brain_mask')]),
-        (reference_outputs, realign_runs, [('bold_ref', 'ref_file')]),
-        (realign_runs, apply_brainmask, [('out_file', 'in_file')]),
-        (reference_outputs, apply_brainmask, [('brain_mask', 'in_file2')]),
-        (bdg, get_info, [('func', 'functional_file'), ('events', 'events_file')])
+        (bdg, get_info, [('func', 'functional_file')]),
+        (get_info, realign_runs, [('reference_image', 'ref_file')]),
     ])
 
     if use_rapidart:
         workflow.connect([
             (get_info, run_rapidart, [('motion_parameters', 'realignment_parameters')]),
-            (reference_outputs, run_rapidart, [('brain_mask', 'mask_file')]),
+            (get_info, run_rapidart, [('brain_mask', 'mask_file')]),
             (realign_runs, run_rapidart, [('out_file', 'realigned_files')]),
             (run_rapidart, reshape_rapidart, [('outlier_files', 'outlier_files')]),
             (get_info, reshape_rapidart, [('run_info', 'run_info')]),
@@ -252,22 +208,22 @@ def fsl_run_level_wf(model,
 
     if smoothing_level == 'l1':
         workflow.connect([
-            (apply_brainmask, get_tmean_img, [('out_file', 'in_file')]),
-            (apply_brainmask, setup_susan, [('out_file', 'func')]),
-            (reference_outputs, setup_susan, [('brain_mask', 'brain_mask')]),
-            (get_tmean_img, setup_susan, [('out_file', 'mean_image')]),
-            (apply_brainmask, run_susan, [('out_file', 'in_file')]),
-            (setup_susan, run_susan, [('brightness_threshold', 'brightness_threshold'),
-                                      ('usans', 'usans')]),
-            (run_susan, apply_mask_smooth, [('smoothed_file', 'in_file')]),
-            (reference_outputs, apply_mask_smooth, [('brain_mask', 'in_file2')]),
-            (apply_mask_smooth, specify_model, [('out_file', 'functional_runs')]),
-            (apply_mask_smooth, fit_model, [('out_file', 'functional_data')])
+            (realign_runs, mean_img, [('out_file', 'in_file')]),
+            (realign_runs, median_img, [('out_file', 'in_file')]),
+            (get_info, mean_img, [('brain_mask', 'mask_file')]),
+            (get_info, median_img, [('brain_mask', 'mask_file')]),
+            (mean_img, merge, [('out_file', 'in1')]),
+            (median_img, merge, [('out_stat', 'in2')]),
+            (realign_runs, run_susan, [('out_file', 'in_file')]),
+            (median_img, run_susan, [(('out_stat', utils.get_btthresh), 'brightness_threshold')]),
+            (merge, run_susan, [(('out', utils.get_usans), 'usans')]),
+            (run_susan, specify_model, [('smoothed_file', 'functional_runs')]),
+            (run_susan, fit_model, [('smoothed_file', 'functional_data')])
         ])
     else:
         workflow.connect([
-            (apply_brainmask, specify_model, [('out_file', 'functional_runs')]),
-            (apply_brainmask, fit_model, [('out_file', 'functional_data')])
+            (realign_runs, specify_model, [('out_file', 'functional_runs')]),
+            (realign_runs, fit_model, [('out_file', 'functional_data')])
         ])
 
     workflow.connect([
@@ -320,7 +276,7 @@ def fsl_run_level_wf(model,
 
         (collate_outputs, wrangle_outputs, [('metadata', 'contrast_metadata'),
                                             ('out', 'contrast_maps')]),
-        (reference_outputs, wrangle_outputs, [('brain_mask', 'brain_mask')])
+        (get_info, wrangle_outputs, [('brain_mask', 'brain_mask')])
     ])
 
     return workflow

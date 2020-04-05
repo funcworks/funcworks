@@ -228,10 +228,7 @@ class BIDSDataGrabber(LibraryBaseInterface, IOBase):
     def _list_outputs(self):
         from bids import BIDSLayout
 
-        layout = BIDSLayout(
-            self.inputs.base_dir, derivatives=self.inputs.index_derivatives,
-            database_path=self.inputs.database_path, reset_database=False
-        )
+        layout = BIDSLayout.load(self.inputs.database_path)
 
         # If infield is not given nm input value, silently ignore
         filters = {}

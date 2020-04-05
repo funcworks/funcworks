@@ -107,6 +107,7 @@ class PlotMatrices(IOBase):
             Path(self.inputs.output_dir) / build_path(entities, path_patterns=path_pattern)
         matrix_path.parent.mkdir(exist_ok=True, parents=True)
         plt.savefig(matrix_path, bbox_inches='tight')
+        plt.close()
         return matrix_path
 
     def _plot_corr_matrix(self, corr_matrix, path_pattern, regressor_names, cmap=None):
@@ -126,4 +127,5 @@ class PlotMatrices(IOBase):
             Path(self.inputs.output_dir) / build_path(entities, path_patterns=path_pattern)
         matrix_path.parent.mkdir(exist_ok=True, parents=True)
         plt.savefig(matrix_path, bbox_inches='tight')
+        plt.close()
         return matrix_path
