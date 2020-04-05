@@ -56,8 +56,7 @@ class GetRunModelInfo(IOBase):
         contrast_entities = self._get_entities(
             contrasts=run_conts, run_entities=entities)
         detrend_poly = self.inputs.detrend_poly
-        entities.update({'Volumes': nb.load(self.inputs.functional_file).shape[3],
-                         'DegreesOfFreedom' : len(event_regs + confound_regs)})
+        entities.update({'DegreesOfFreedom' : len(event_regs + confound_regs)})
 
         if detrend_poly:
             polynomial_names, polynomial_arrays = \
