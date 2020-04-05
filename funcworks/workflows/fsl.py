@@ -154,7 +154,7 @@ def fsl_run_level_wf(model,
     reshape_rapidart = pe.MapNode(
         Function(input_names=['run_info', 'func', 'outlier_files',
                               'contrast_entities'],
-                 output_names=['run_info'],
+                 output_names=['run_info', 'contrast_entities'],
                  function=utils.reshape_ra),
         iterfield=['outlier_files', 'run_info', 'func', 'contrast_entities'],
         name='reshape_rapidart')
