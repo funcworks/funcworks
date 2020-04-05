@@ -79,7 +79,7 @@ def reshape_ra(run_info, func, outlier_files, contrast_entities):
     contrast_ents = contrast_entities.copy()
     contrast_entities = []
     for contrast_ents in contrast_ents:
-        curr_dof = contrast_ents['DegreesOfFreedom'].values
+        curr_dof = int(contrast_ents['DegreesOfFreedom'])
         contrast_ents.update({
             'DegreesOfFreedom': (curr_dof - len(outlier_frame['outlier_index']))
         })
