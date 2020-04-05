@@ -51,7 +51,8 @@ class GetRunModelInfo(IOBase):
         entities.update({'Volumes': nb.load(self.inputs.functional_file).shape[3]})
         run_info, event_regs, confound_regs = self._get_model_info(
             regressors_file=regressors_file)
-        entities.update({'DegreesOfFreedom' : len(event_regs + confound_regs)})
+        entities.update({'DegreesOfFreedom' : (
+            entities['Volumes'] - len(event_regs + confound_regs))})
         run_conts, contrast_names = self._get_contrasts(event_names=event_regs)
 
         contrast_entities = self._get_entities(
