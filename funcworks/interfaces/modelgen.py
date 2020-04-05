@@ -293,7 +293,8 @@ class GenerateHigherInfo(IOBase):
                 if bids_info['Metadata']['stat'] == 'effect':
                     open_file = nb.load(bids_info['File'])
                     affine = open_file.affine
-                    dof_file = np.ones_like(open_file.get_fdata())
+                    dof_file = (np.ones_like(open_file.get_fdata())
+                                * bids_info['Metadata']['DegreesOfFreedom'])
                     dof_file = nb.nifti1.Nifti1Image(dof_file, affine)
                     ceffect_maps.append(open_file)
                     cdof_maps.append(dof_file)
