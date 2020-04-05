@@ -152,10 +152,11 @@ def fsl_run_level_wf(model,
         name='run_rapidart')
 
     reshape_rapidart = pe.MapNode(
-        Function(input_names=['run_info', 'func', 'outlier_files'],
+        Function(input_names=['run_info', 'func', 'outlier_files',
+                              'contrast_entities'],
                  output_names=['run_info'],
                  function=utils.reshape_ra),
-        iterfield=['outlier_files', 'run_info', 'func'],
+        iterfield=['outlier_files', 'run_info', 'func', 'contrast_entities'],
         name='reshape_rapidart')
 
     get_tmean_img = pe.MapNode(
@@ -241,13 +242,18 @@ def fsl_run_level_wf(model,
             (run_rapidart, reshape_rapidart, [('outlier_files', 'outlier_files')]),
             (get_info, reshape_rapidart, [('run_info', 'run_info')]),
             (realign_runs, reshape_rapidart, [('out_file', 'func')]),
+            (get_info, reshape_rapidart, [('contrast_entities', 'contrast_entities')]),
             (reshape_rapidart, specify_model, [('run_info', 'subject_info')]),
-            (reshape_rapidart, plot_matrices, [('run_info', 'run_info')])
+            (reshape_rapidart, plot_matrices, [('run_info', 'run_info')]),
+            (reshape_rapidart, collate, [
+                ('contrast_entities', 'contrast_metadata')])
         ])
     else:
         workflow.connect([
             (get_info, specify_model, [('run_info', 'subject_info')]),
-            (get_info, plot_matrices, [('run_info', 'run_info')])
+            (get_info, plot_matrices, [('run_info', 'run_info')]),
+            (get_info, collate, [
+                ('contrast_entities', 'contrast_metadata')])
         ])
 
     if smoothing_level == 'l1':
@@ -308,7 +314,6 @@ def fsl_run_level_wf(model,
                                    ('tstats', 'tstat_maps'),
                                    ('zstats', 'zscore_maps')]),
 
-        (get_info, collate, [('contrast_entities', 'contrast_metadata')]),
         (collate, collate_outputs, [('effect_maps', 'effect_maps'),
                                     ('variance_maps', 'variance_maps'),
                                     ('tstat_maps', 'tstat_maps'),

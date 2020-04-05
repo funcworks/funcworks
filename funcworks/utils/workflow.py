@@ -62,7 +62,7 @@ def snake_to_camel(string):
     words = string.replace('.', '').split('_')
     return words[0] + ''.join(word.title() for word in words[1:])
 
-def reshape_ra(run_info, func, outlier_files):
+def reshape_ra(run_info, func, outlier_files, contrast_entities):
     import pandas as pd
     import numpy as np
     import nibabel as nb
@@ -76,7 +76,11 @@ def reshape_ra(run_info, func, outlier_files):
         ra_col[row['outlier_index']] = 1
         run_dict['regressors'].append(ra_col)
     run_info = Bunch(**run_dict)
-    return run_info
+    for contrast_ents in contrast_entities:
+        contrast_ents.update({
+            'DegreesOfFreedom': len(run_info.events + run_info.regressor_names)
+        })
+    return run_info, contrast_entities
 
 def correct_matrix(design_matrix):
     import numpy as np
