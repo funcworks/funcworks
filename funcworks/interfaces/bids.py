@@ -1,7 +1,7 @@
 """
 General BIDS interfaces
 """
-#pylint: disable=W0703,C0115,C0415
+# pylint: disable=W0703,C0115,C0415
 import shutil
 from pathlib import Path
 from gzip import GzipFile
@@ -12,8 +12,7 @@ from nipype.interfaces.base import (
     BaseInterfaceInputSpec, TraitedSpec,
     InputMultiPath, OutputMultiPath, File, Directory,
     traits, isdefined, LibraryBaseInterface, Str,
-    DynamicTraitedSpec, Undefined
-    )
+    DynamicTraitedSpec, Undefined)
 from nipype.interfaces.io import IOBase
 import nibabel as nb
 from ..utils import snake_to_camel
@@ -57,6 +56,7 @@ def bids_split_filename(fname):
         ext = file_path.suffix
     return pth, fname, ext
 
+
 class BIDSDataSinkInputSpec(BaseInterfaceInputSpec):
     base_directory = Directory(
         mandatory=True,
@@ -77,8 +77,8 @@ class BIDSDataSinkOutputSpec(TraitedSpec):
 class BIDSDataSink(IOBase):
     '''
     DataSink for producing moving several files to a nice BIDS Naming structure
-    given files and a list of entities. All credit goes to Chris Markiewicz, Alejandro De La Vega,
-    Dylan Nielson and Adina Wagner and the Fitlins team.
+    given files and a list of entities. All credit goes to Chris Markiewicz,
+    Alejandro De La Vega, Dylan Nielson and Adina Wagner and the Fitlins team.
     '''
     input_spec = BIDSDataSinkInputSpec
     output_spec = BIDSDataSinkOutputSpec
@@ -88,7 +88,7 @@ class BIDSDataSink(IOBase):
     def _list_outputs(self):
         from bids.layout.writing import build_path
         base_dir = Path(self.inputs.base_directory)
-        base_dir.mkdir(exist_ok=True, parents=True) #pylint: disable=E1123
+        base_dir.mkdir(exist_ok=True, parents=True)  # pylint: disable=E1123
 
         path_patterns = self.inputs.path_patterns
         if not isdefined(path_patterns):
@@ -109,6 +109,7 @@ class BIDSDataSink(IOBase):
             out_files.append(out_fname)
 
         return {'out_file': out_files}
+
 
 def _copy_or_convert(in_file, out_file):
     in_ext = bids_split_filename(in_file)[2]
@@ -138,23 +139,25 @@ def _copy_or_convert(in_file, out_file):
 
     raise RuntimeError("Cannot convert {} to {}".format(in_ext, out_ext))
 
+
 class BIDSDataGrabberInputSpec(DynamicTraitedSpec):
-    base_dir = Directory(exists=True, desc="Path to BIDS Directory.", mandatory=True)
-    database_path = Directory(exists=True, mandatory=True, desc="Path to BIDS Dataset DBCACHE")
+    base_dir = Directory(
+        exists=True, desc="Path to BIDS Directory.", mandatory=True)
+    database_path = Directory(
+        exists=True, mandatory=True, desc="Path to BIDS Dataset DBCACHE")
     output_query = traits.Dict(
-        key_trait=Str, value_trait=traits.Dict, desc="Queries for outfield outputs"
-    )
+        key_trait=Str,
+        value_trait=traits.Dict, desc="Queries for outfield outputs")
     raise_on_empty = traits.Bool(
         True,
         usedefault=True,
-        desc="Generate exception if list is empty for a given field",
-    )
+        desc="Generate exception if list is empty for a given field")
     index_derivatives = traits.Any(
         [traits.Bool, traits.Str, traits.List(Directory)],
         default=False, mandatory=True, usedefault=True,
-        desc="Directory / List of Directories to Index, Otherwise no derivative indexing"
-             "Will occur"
-    )
+        desc="Directory / List of Directories to Index, "
+             "Otherwise no derivative indexing will occur")
+
 
 class BIDSDataGrabber(LibraryBaseInterface, IOBase):
     """BIDS datagrabber module that wraps around pybids to allow arbitrary
@@ -211,7 +214,9 @@ class BIDSDataGrabber(LibraryBaseInterface, IOBase):
         if infields is None:
             from bids import layout as bidslayout
 
-            bids_config = Path(bidslayout.__file__).parent / "config" / "bids.json"
+            bids_config = (
+                Path(bidslayout.__file__).parent
+                / "config" / "bids.json")
             bids_config = json.load(open(bids_config, "r"))
             infields = [i["name"] for i in bids_config["entities"]]
 
@@ -228,10 +233,7 @@ class BIDSDataGrabber(LibraryBaseInterface, IOBase):
     def _list_outputs(self):
         from bids import BIDSLayout
 
-        layout = BIDSLayout(
-            self.inputs.base_dir, derivatives=self.inputs.index_derivatives,
-            database_path=self.inputs.database_path, reset_database=False
-        )
+        layout = BIDSLayout.load(self.inputs.database_path)
 
         # If infield is not given nm input value, silently ignore
         filters = {}
@@ -258,8 +260,10 @@ class BIDSDataGrabber(LibraryBaseInterface, IOBase):
     def _add_output_traits(self, base):
         return add_traits(base, list(self.inputs.output_query.keys()))
 
+
 def add_traits(base, names, trait_type=None):
-    """ Add traits to a traited class.
+    """
+    Add traits to a traited class.
     All traits are set to Undefined by default
     """
     if trait_type is None:

@@ -1,10 +1,10 @@
-#pylint: disable=R0913,R0914,C0114,C0116,W0212
+# pylint: disable=R0913,R0914,C0114,C0116,W0212
 import json
 from pathlib import Path
 from copy import deepcopy
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
-from .. import __version__
 from .fsl import fsl_run_level_wf, fsl_higher_level_wf
+
 
 def init_funcworks_wf(model_file,
                       bids_dir,
@@ -45,25 +45,25 @@ def init_funcworks_wf(model_file,
         smoothing_type = None
 
     for subject_id in participants:
-        single_subject_wf = init_funcworks_subject_wf(model=model,
-                                                      bids_dir=bids_dir,
-                                                      output_dir=(output_dir /
-                                                                  'funcworks' /
-                                                                  model['Name']),
-                                                      work_dir=work_dir,
-                                                      database_path=database_path,
-                                                      subject_id=subject_id,
-                                                      analysis_level=analysis_level,
-                                                      smoothing_fwhm=smoothing_fwhm,
-                                                      smoothing_level=smoothing_level,
-                                                      smoothing_type=smoothing_type,
-                                                      derivatives=derivatives,
-                                                      use_rapidart=use_rapidart,
-                                                      detrend_poly=detrend_poly,
-                                                      align_volumes=align_volumes,
-                                                      name=f'single_subject_{subject_id}_wf')
-        crash_dir = (Path(output_dir) / 'funcworks' / 'logs' /
-                     model['Name'] / f'sub-{subject_id}' / run_uuid)
+        single_subject_wf = init_funcworks_subject_wf(
+            model=model,
+            bids_dir=bids_dir,
+            output_dir=(output_dir / 'funcworks' / model['Name']),
+            work_dir=work_dir,
+            database_path=database_path,
+            subject_id=subject_id,
+            analysis_level=analysis_level,
+            smoothing_fwhm=smoothing_fwhm,
+            smoothing_level=smoothing_level,
+            smoothing_type=smoothing_type,
+            derivatives=derivatives,
+            use_rapidart=use_rapidart,
+            detrend_poly=detrend_poly,
+            align_volumes=align_volumes,
+            name=f'single_subject_{subject_id}_wf')
+        crash_dir = (Path(output_dir) / 'funcworks'
+                     / 'logs' / model['Name']
+                     / f'sub-{subject_id}' / run_uuid)
         crash_dir.mkdir(exist_ok=True, parents=True)
 
         single_subject_wf.config['execution']['crashdump_dir'] = str(crash_dir)
@@ -74,6 +74,7 @@ def init_funcworks_wf(model_file,
         funcworks_wf.add_nodes([single_subject_wf])
 
     return funcworks_wf
+
 
 def init_funcworks_subject_wf(model,
                               bids_dir,
@@ -92,42 +93,45 @@ def init_funcworks_subject_wf(model,
                               name):
 
     workflow = Workflow(name=name)
-    #stage = None
+    stage = None
+    pre_level = None
     for step in model['Steps']:
         level = step['Level']
         if level == 'run':
-            model = fsl_run_level_wf(model=model,
-                                     step=step,
-                                     bids_dir=bids_dir,
-                                     output_dir=output_dir,
-                                     work_dir=work_dir,
-                                     database_path=database_path,
-                                     subject_id=subject_id,
-                                     smoothing_fwhm=smoothing_fwhm,
-                                     smoothing_level=smoothing_level,
-                                     smoothing_type=smoothing_type,
-                                     derivatives=derivatives,
-                                     use_rapidart=use_rapidart,
-                                     detrend_poly=detrend_poly,
-                                     align_volumes=align_volumes,
-                                     name=f'fsl_run_level_wf')
+            model = fsl_run_level_wf(
+                model=model,
+                step=step,
+                bids_dir=bids_dir,
+                output_dir=output_dir,
+                work_dir=work_dir,
+                database_path=database_path,
+                subject_id=subject_id,
+                smoothing_fwhm=smoothing_fwhm,
+                smoothing_level=smoothing_level,
+                smoothing_type=smoothing_type,
+                derivatives=derivatives,
+                use_rapidart=use_rapidart,
+                detrend_poly=detrend_poly,
+                align_volumes=align_volumes,
+                name=f'fsl_run_level_wf')
             workflow.add_nodes([model])
         else:
-            model = fsl_higher_level_wf(step=step,
-                                        output_dir=output_dir,
-                                        work_dir=work_dir,
-                                        smoothing_fwhm=smoothing_fwhm,
-                                        smoothing_level=smoothing_level,
-                                        smoothing_type=smoothing_type,
-                                        name=f'fsl_{level}_level_wf')
+            model = fsl_higher_level_wf(
+                step=step,
+                output_dir=output_dir,
+                work_dir=work_dir,
+                # smoothing_fwhm=smoothing_fwhm,
+                smoothing_level=smoothing_level,
+                # smoothing_type=smoothing_type,
+                name=f'fsl_{level}_level_wf')
             workflow.connect([
-                (stage, model,
-                 [(f'wrangle_{pre_level}_outputs.contrast_maps',
-                   f'wrangle_{level}_inputs.contrast_maps'),
-                  (f'wrangle_{pre_level}_outputs.contrast_metadata',
-                   f'wrangle_{level}_inputs.contrast_metadata'),
-                  (f'wrangle_{pre_level}_outputs.brain_mask',
-                   f'wrangle_{level}_inputs.brain_mask')])
+                (stage, model, [
+                    (f'wrangle_{pre_level}_outputs.contrast_maps',
+                     f'wrangle_{level}_inputs.contrast_maps'),
+                    (f'wrangle_{pre_level}_outputs.contrast_metadata',
+                     f'wrangle_{level}_inputs.contrast_metadata'),
+                    (f'wrangle_{pre_level}_outputs.brain_mask',
+                     f'wrangle_{level}_inputs.brain_mask')])
             ])
 
         stage = model
@@ -135,6 +139,7 @@ def init_funcworks_subject_wf(model,
         if level == analysis_level:
             break
     return workflow
+
 
 def _pop(inlist):
     if isinstance(inlist, (list, tuple)):

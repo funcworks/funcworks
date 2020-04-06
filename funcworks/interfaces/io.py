@@ -3,6 +3,7 @@ from nipype.interfaces.base import (
     isdefined, DynamicTraitedSpec, traits, TraitedSpec, SimpleInterface)
 from nipype.interfaces.io import IOBase, add_traits
 
+
 class MergeAll(IOBase):
     input_spec = DynamicTraitedSpec
     output_spec = DynamicTraitedSpec
@@ -44,6 +45,7 @@ class MergeAll(IOBase):
 
         return outputs
 
+
 class CollateWithMetadataInputSpec(DynamicTraitedSpec):
     metadata = traits.List(traits.Dict)
     field_to_metadata_map = traits.Dict(traits.Str)
@@ -79,7 +81,8 @@ class CollateWithMetadata(SimpleInterface):
             # Allow for missing values
             if isdefined(val):
                 if len(val) != meta_len:
-                    raise ValueError(f"List lengths must match metadata. Failing list: {key}")
+                    raise ValueError(f"List lengths must match metadata. "
+                                     f"Failing list: {key}")
                 for m_data, obj in zip(orig_metadata, val):
                     metadata = m_data.copy()
                     metadata.update(md_map.get(key, {}))
