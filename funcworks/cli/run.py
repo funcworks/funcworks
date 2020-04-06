@@ -2,7 +2,6 @@
 Main run script
 """
 # pylint: disable=C0103,R0913,R0914,W0404,C0116,W0212,W0613,W0611,W1202,C0415
-import os
 import gc
 import sys
 import uuid
@@ -25,8 +24,8 @@ def check_deps(workflow):
         (node.interface.__class__.__name__, node.interface._cmd)
         for node in workflow._get_all_nodes()
         if (
-            hasattr(node.interface, '_cmd') and
-            which(node.interface._cmd.split()[0]) is None))
+        hasattr(node.interface, '_cmd')
+        and which(node.interface._cmd.split()[0]) is None))
 
 
 def _warn_redirect(message, category, filename, lineno, file=None, line=None):
@@ -220,8 +219,8 @@ def build_workflow(opts, retval):
         build_log.error(
             'The selected output folder is the same as the input BIDS folder. '
             'Please modify the output path (suggestion: %s).',
-            (bids_dir / 'derivatives' /
-             ('funcworks-%s' % __version__.split('+')[0])))
+            (bids_dir / 'derivatives'
+             / ('funcworks-%s' % __version__.split('+')[0])))
         retval['return_code'] = 1
         return retval
 
@@ -322,7 +321,7 @@ def build_workflow(opts, retval):
                                uuid=run_uuid))
 
     if not opts.model_file:
-        model_file = Path(bids_dir) / 'models'/ 'model-default_smdl.json'
+        model_file = Path(bids_dir) / 'models' / 'model-default_smdl.json'
         if not model_file.exists():
             raise ValueError('Default Model File not Found')
     else:

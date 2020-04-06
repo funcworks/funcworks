@@ -258,6 +258,7 @@ class BIDSDataGrabber(LibraryBaseInterface, IOBase):
     def _add_output_traits(self, base):
         return add_traits(base, list(self.inputs.output_query.keys()))
 
+
 def add_traits(base, names, trait_type=None):
     """
     Add traits to a traited class.
