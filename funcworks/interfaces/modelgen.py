@@ -307,8 +307,8 @@ class GenerateHigherInfo(IOBase):
                      'dof_maps': [],
                      'variance_maps': [],
                      'map_entities': []}
-        mask_pattern = ('sub-{subject}[_ses-{session}]_task-{task}'
-                        '_run-{run}[_space-{space}]_desc-brain_mask.nii.gz')
+        # mask_pattern = ('sub-{subject}[_ses-{session}]_task-{task}'
+        #                '_run-{run}[_space-{space}]_desc-brain_mask.nii.gz')
         for dcontrast in dummy_contrasts:
             dcontrast_info = {'dceffect_maps': [],
                               'dcvariance_maps': [],
@@ -321,8 +321,8 @@ class GenerateHigherInfo(IOBase):
                     open_file = nb.load(bids_info['File'])
                     affine = open_file.affine
                     dof_file = (
-                        np.ones_like(open_file.get_fdata())
-                        * bids_info['Metadata']['DegreesOfFreedom'])
+                        np.ones_like(open_file.get_fdata()) *
+                        bids_info['Metadata']['DegreesOfFreedom'])
                     dof_file = nb.nifti1.Nifti1Image(dof_file, affine)
                     dcontrast_info['dceffect_maps'].append(open_file)
                     dcontrast_info['dcdof_maps'].append(dof_file)

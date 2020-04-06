@@ -62,8 +62,8 @@ def init_funcworks_wf(model_file,
             align_volumes=align_volumes,
             name=f'single_subject_{subject_id}_wf')
         crash_dir = (
-            Path(output_dir) / 'funcworks'
-            / 'logs' / model['Name'] / f'sub-{subject_id}' / run_uuid)
+            Path(output_dir) / 'funcworks' /
+            'logs' / model['Name'] / f'sub-{subject_id}' / run_uuid)
         crash_dir.mkdir(exist_ok=True, parents=True)
 
         single_subject_wf.config['execution']['crashdump_dir'] = str(crash_dir)
@@ -120,9 +120,9 @@ def init_funcworks_subject_wf(model,
                 step=step,
                 output_dir=output_dir,
                 work_dir=work_dir,
-                #smoothing_fwhm=smoothing_fwhm,
+                # smoothing_fwhm=smoothing_fwhm,
                 smoothing_level=smoothing_level,
-                #smoothing_type=smoothing_type,
+                # smoothing_type=smoothing_type,
                 name=f'fsl_{level}_level_wf')
             workflow.connect([
                 (stage, model, [
@@ -139,6 +139,7 @@ def init_funcworks_subject_wf(model,
         if level == analysis_level:
             break
     return workflow
+
 
 def _pop(inlist):
     if isinstance(inlist, (list, tuple)):

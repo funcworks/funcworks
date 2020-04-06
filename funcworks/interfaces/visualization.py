@@ -39,7 +39,7 @@ class PlotMatrices(IOBase):
     input_spec = PlotMatricesInputSpec
     output_spec = PlotMatricesOutputSpec
     _always_run = True
-    
+
     def _list_outputs(self):
         ents = self.inputs.entities
         run_info = self.inputs.run_info

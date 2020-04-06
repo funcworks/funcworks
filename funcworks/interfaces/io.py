@@ -3,6 +3,7 @@ from nipype.interfaces.base import (
     isdefined, DynamicTraitedSpec, traits, TraitedSpec, SimpleInterface)
 from nipype.interfaces.io import IOBase, add_traits
 
+
 class MergeAll(IOBase):
     input_spec = DynamicTraitedSpec
     output_spec = DynamicTraitedSpec
@@ -43,6 +44,7 @@ class MergeAll(IOBase):
         self._lengths = None
 
         return outputs
+
 
 class CollateWithMetadataInputSpec(DynamicTraitedSpec):
     metadata = traits.List(traits.Dict)
