@@ -213,7 +213,8 @@ def fsl_run_level_wf(model,
                 ('run_info', 'run_info'),
                 ('contrast_entities', 'contrast_entities')]),
             (realign_runs, reshape_rapidart, [('out_file', 'func')]),
-            (get_info, reshape_rapidart, [('contrast_entities', 'contrast_entities')]),
+            (get_info, reshape_rapidart, [
+                ('contrast_entities', 'contrast_entities')]),
             (reshape_rapidart, specify_model, [('run_info', 'subject_info')]),
             (reshape_rapidart, plot_matrices, [('run_info', 'run_info')]),
             (reshape_rapidart, collate, [
