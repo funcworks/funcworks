@@ -3,38 +3,6 @@ Helper functions for FSL workflows
 """
 #pylint: disable=R0913,R0914,C0415,C0116
 #Run Level Functions
-def get_contrasts(step, include_contrasts):
-    """
-    Produces contrasts from a given model file and a run specific events file
-    """
-    import itertools as it
-    include_combos = list(it.combinations(include_contrasts, 2))
-    all_contrasts = []
-    contrasts = step["Contrasts"]
-    dummy_contrasts = step["DummyContrasts"]['Conditions']
-    for contrast in dummy_contrasts:
-        if contrast not in include_contrasts:
-            continue
-        all_contrasts.append((contrast.split('.')[-1], 'T',
-                              [contrast],
-                              [1]))
-    for contrast in contrasts:
-        if not any([all([x in contrast['ConditionList'], y in contrast['ConditionList']]) \
-                    for x, y in include_combos])\
-        and len(contrast['ConditionList']) == 2:
-            continue
-
-        if contrast['Name'] == 'task_vs_baseline':
-            weight_vector = [1 * 1 / len(include_contrasts)] * len(include_contrasts)
-            all_contrasts.append((contrast['Name'], contrast['Type'].upper(),
-                                  include_contrasts,
-                                  weight_vector))
-        else:
-            all_contrasts.append((contrast['Name'], contrast['Type'].upper(),
-                                  contrast['ConditionList'],
-                                  contrast['Weights']))
-    return all_contrasts
-
 def get_btthresh(medianvals):
     return [0.75 * val for val in medianvals]
 
@@ -54,20 +22,29 @@ def snake_to_camel(string):
     words = string.replace('.', '').split('_')
     return words[0] + ''.join(word.title() for word in words[1:])
 
-def reshape_ra(run_info, func, outlier_files):
+def reshape_ra(run_info, func, outlier_files, contrast_entities):
     import pandas as pd
     import numpy as np
     import nibabel as nb
     from nipype.interfaces.base import Bunch
     run_dict = run_info.dictcopy()
     ntimepoints = nb.load(func).get_data().shape[-1]
-    outlier_frame = pd.read_csv(outlier_files, header=None, names=['outlier_index'])
+    outlier_frame = pd.read_csv(
+        outlier_files, header=None, names=['outlier_index'])
     for i, row in outlier_frame.iterrows():
         run_dict['regressor_names'].append(f'rapidart{i:02d}')
         ra_col = np.zeros(ntimepoints)
         ra_col[row['outlier_index']] = 1
         run_dict['regressors'].append(ra_col)
     run_info = Bunch(**run_dict)
+
+    contrast_ents = contrast_entities.copy()
+    contrast_entities = []
+    for ents in contrast_ents:
+        cont_ents = ents.copy()
+        curr_dof = cont_ents['DegreesOfFreedom']
+        cont_ents.update({'DegreesOfFreedom': curr_dof - len(outlier_frame)})
+        contrast_entities.append(cont_ents)
     return run_info
 
 def correct_matrix(design_matrix):
@@ -81,13 +58,13 @@ def correct_matrix(design_matrix):
     matrix_data = pd.read_csv(
         design_matrix, skiprows=matrix_index, delim_whitespace=True,
         header=None)
+    mat_rows, mat_cols = matrix_data.shape
     matrix_path = Path.cwd() / 'run0.mat'
     if matrix_path.is_file():
         open(matrix_path, 'w').close()
     with open(matrix_path, 'a') as dma:
-        dma.writelines('/NumWaves {columns}\t\n'.format(columns=matrix_data.shape[1]))
-        dma.writelines('/NumPoints {rows}\t\n'.format(rows=matrix_data.shape[0]))
-        dma.writelines('/Matrix\n')
+        dma.writelines(
+            f'/NumWaves {mat_cols}\t\n/NumPoints {mat_rows}\t\n/Matrix\n')
     for idx, column in matrix_data.T.iterrows():
         if column.max() < .00000000000001:
             matrix_data[idx] = np.ones(len(matrix_data))
