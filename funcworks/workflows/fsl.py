@@ -13,6 +13,8 @@ from ..interfaces.io import MergeAll, CollateWithMetadata
 from ..interfaces.visualization import PlotMatrices
 from .. import utils
 
+
+
 def fsl_run_level_wf(model,
                      step,
                      bids_dir,
@@ -70,7 +72,8 @@ def fsl_run_level_wf(model,
         name='func_realign')
 
     specify_model = pe.MapNode(
-        modelgen.SpecifyModel(high_pass_filter_cutoff=-1.0, input_units='secs'),
+        modelgen.SpecifyModel(
+            high_pass_filter_cutoff=-1.0, input_units='secs'),
         iterfield=['functional_runs', 'subject_info', 'time_repetition'],
         name=f'model_{level}_specify')
 
@@ -83,7 +86,7 @@ def fsl_run_level_wf(model,
         name=f'model_{level}_fit')
 
     first_level_design = pe.MapNode(
-        fsl.Level1Design(bases={'dgamma':{'derivs': False}},
+        fsl.Level1Design(bases={'dgamma': {'derivs': False}},
                          model_serial_correlations=False),
         iterfield=['session_info', 'interscan_interval', 'contrasts'],
         name=f'model_{level}_design')

@@ -81,7 +81,8 @@ class CollateWithMetadata(SimpleInterface):
             # Allow for missing values
             if isdefined(val):
                 if len(val) != meta_len:
-                    raise ValueError(f"List lengths must match metadata. Failing list: {key}")
+                    raise ValueError(f"List lengths must match metadata. "
+                                     f"Failing list: {key}")
                 for m_data, obj in zip(orig_metadata, val):
                     metadata = m_data.copy()
                     metadata.update(md_map.get(key, {}))

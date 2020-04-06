@@ -13,8 +13,8 @@ from tempfile import mkdtemp
 from time import strftime
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
-logging.addLevelName(25, 'IMPORTANT')  # Add a new level between INFO and WARNING
-logging.addLevelName(15, 'VERBOSE')  # Add a new level between INFO and DEBUG
+logging.addLevelName(25, 'IMPORTANT')  # New level between INFO and WARNING
+logging.addLevelName(15, 'VERBOSE')  # New level between INFO and DEBUG
 logger = logging.getLogger('cli')
 
 
@@ -55,19 +55,22 @@ def get_parser():
         '-d', '--derivatives', action='store', nargs='+',
         help='location of derivatives containing preprocessed images.')
     parser.add_argument(
-        '--participant_label', '--participant-label', action='store', nargs='+',
+        '--participant_label', '--participant-label',
+        action='store', nargs='+',
         help='a space delimited list of participant identifiers or a single '
         'identifier (the sub- prefix can be removed)')
     parser.add_argument(
         '-s', '--smoothing', action='store', metavar="FWHM[:LEVEL:[TYPE]]",
         default=None,
-        help="Smooth BOLD series with FWHM mm kernel prior to fitting. "
-             "Optional analysis LEVEL (default: l1) may be specified by level "
-             "(e.g., `l1`) or name (`run`, `subject`, `session` or `dataset`). "
-             "Optional smoothing TYPE (default: iso) must be one of:"
-             "`iso` (isotropic). "
-             "e.g., `--smoothing 5:run:iso` will perform a 5mm FWHM isotropic "
-             "smoothing on run-level maps before evaluating the dataset level.")
+        help=(
+            "Smooth BOLD series with FWHM mm kernel prior to fitting. "
+            "Optional analysis LEVEL (default: l1) is specified by level "
+            "(`l1`) or name (`run`, `subject`, `session` or `dataset`). "
+            "Optional smoothing TYPE (default: iso) must be one of:"
+            "`iso` (isotropic). "
+            "e.g., `--smoothing 5:run:iso` will perform a 5mm FWHM isotropic "
+            "smoothing on run-level maps before evaluating the dataset level.")
+        )
     parser.add_argument(
         '-w', '--work_dir', action='store', type=Path,
         default=mkdtemp(),
