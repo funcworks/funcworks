@@ -27,55 +27,74 @@ def check_deps(workflow):
         if (hasattr(node.interface, '_cmd') and
             which(node.interface._cmd.split()[0]) is None))
 
+
 def _warn_redirect(message, category, filename, lineno, file=None, line=None):
     logger.warning('Captured warning (%s): %s', category, message)
 
+
 def get_parser():
     """Build Parser Object"""
-    parser = ArgumentParser(description='FUNCWORKs: fMRI FUNCtional WORKflows',
-                            formatter_class=ArgumentDefaultsHelpFormatter)
+    parser = ArgumentParser(
+        description='FUNCWORKs: fMRI FUNCtional WORKflows',
+        formatter_class=ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument('bids_dir', action='store', type=Path,
-                        help='the root folder of a BIDS valid dataset (sub-XXXXX folders should '
-                             'be found at the top level in this folder).')
-    parser.add_argument('output_dir', action='store', type=Path,
-                        help='the output path for the outcomes of preprocessing and visual '
-                             'reports')
-    parser.add_argument('analysis_level', choices=['run', 'session', 'participant', 'dataset'],
-                        help='processing stage to be runa (see BIDS-Apps specification).')
-    parser.add_argument('-m', '--model-file', action='store', type=Path,
-                        help='location of BIDS model description')
-    parser.add_argument('-d', '--derivatives', action='store', nargs='+',
-                        help='location of derivatives (including preprocessed images).'
-                        'If none specified, indexes all derivatives under bids_dir/derivatives.')
-    parser.add_argument('--participant_label', '--participant-label', action='store', nargs='+',
-                        help='a space delimited list of participant identifiers or a single '
-                             'identifier (the sub- prefix can be removed)')
-    parser.add_argument('-s', '--smoothing', action='store', metavar="FWHM[:LEVEL:[TYPE]]",
-                        default=None,
-                        help="Smooth BOLD series with FWHM mm kernel prior to fitting at LEVEL. "
-                             "Optional analysis LEVEL (default: l1) may be specified numerically "
-                             "(e.g., `l1`) or by name (`run`, `subject`, `session` or `dataset`). "
-                             "Optional smoothing TYPE (default: iso) must be one of:"
-                             "`iso` (isotropic). "
-                             "e.g., `--smoothing 5:dataset:iso` will perform a 5mm FWHM isotropic "
-                             "smoothing on subject-level maps before evaluating the dataset level.")
-    parser.add_argument('-w', '--work_dir', action='store', type=Path,
-                        default=mkdtemp(),
-                        help='path where intermediate results should be stored')
-    parser.add_argument('--use-rapidart', action='store_true', default=False,
-                        help='Use RapidArt artifact detection algorithm')
-    parser.add_argument('--use-plugin', action='store', default=None,
-                        help='nipype plugin configuration file')
-    parser.add_argument('--detrend-poly', action='store', default=None, type=int,
-                        help='Legendre polynomials to use for temporal filtering')
-    parser.add_argument('--align-volumes', action='store', default=None, type=int,
-                        help='Bold reference to align timeseries, this will override any '
-                             'run specific inputs in the model file for the boldref and brain_mask')
-    parser.add_argument('--database-path', action='store', default=None, type=Path,
-                        help='Path to existing directory containing BIDS Dataset Database files'
-                             'useful for speeding up run-time')
+    parser.add_argument(
+        'bids_dir', action='store', type=Path,
+        help='the root folder of a BIDS valid dataset '
+        '(sub-XXXXX folders should be found at the top level in this folder).')
+    parser.add_argument(
+        'output_dir', action='store', type=Path,
+        help='the output path for the outcomes of preprocessing and visual '
+             'reports')
+    parser.add_argument(
+        'analysis_level', choices=['run', 'session', 'participant', 'dataset'],
+        help='processing stage to be runa (see BIDS-Apps specification).')
+    parser.add_argument(
+        '-m', '--model-file', action='store', type=Path,
+        help='location of BIDS model description')
+    parser.add_argument(
+        '-d', '--derivatives', action='store', nargs='+',
+        help='location of derivatives containing preprocessed images.')
+    parser.add_argument(
+        '--participant_label', '--participant-label', action='store', nargs='+',
+        help='a space delimited list of participant identifiers or a single '
+        'identifier (the sub- prefix can be removed)')
+    parser.add_argument(
+        '-s', '--smoothing', action='store', metavar="FWHM[:LEVEL:[TYPE]]",
+        default=None,
+        help="Smooth BOLD series with FWHM mm kernel prior to fitting. "
+             "Optional analysis LEVEL (default: l1) may be specified by level "
+             "(e.g., `l1`) or name (`run`, `subject`, `session` or `dataset`). "
+             "Optional smoothing TYPE (default: iso) must be one of:"
+             "`iso` (isotropic). "
+             "e.g., `--smoothing 5:run:iso` will perform a 5mm FWHM isotropic "
+             "smoothing on run-level maps before evaluating the dataset level.")
+    parser.add_argument(
+        '-w', '--work_dir', action='store', type=Path,
+        default=mkdtemp(),
+        help='path where intermediate results should be stored')
+    parser.add_argument(
+        '--use-rapidart', action='store_true', default=False,
+        help='Use RapidArt artifact detection algorithm')
+    parser.add_argument(
+        '--use-plugin', action='store', default=None,
+        help='nipype plugin configuration file')
+    parser.add_argument(
+        '--detrend-poly', action='store', default=None, type=int,
+        help='Legendre polynomials to use for temporal filtering')
+    parser.add_argument(
+        '--align-volumes', action='store',
+        default=None, type=int,
+        help='Bold reference to align timeseries, '
+        'this will override any run specific inputs '
+        'in the model file for the boldref and brain_mask')
+    parser.add_argument(
+        '--database-path', action='store',
+        default=None, type=Path,
+        help='Path to existing directory containing BIDS '
+             'Database files useful for speeding up run-time')
     return parser
+
 
 def main():
     """Entry Point"""
@@ -94,8 +113,10 @@ def main():
     #    sentry_setup(opts, exec_env)
 
     if opts.analysis_level not in ['run', 'session', 'participant', 'dataset']:
-        raise ValueError((f'Unknown analysis level {opts.analysis_level}',
-                          "analysis level must be 'run', 'session', 'participant', 'dataset'"))
+        raise ValueError(
+            (f'Unknown analysis level {opts.analysis_level}',
+             "analysis level must be  one of ",
+             "'run', 'session', 'participant', 'dataset'"))
     with Manager() as mgr:
         retval = mgr.dict()
 
@@ -133,8 +154,9 @@ def main():
     except Exception as e:
         #if not opts.notrack:
         #    from ..utils.sentry import process_crashfile
-        #    crashfolders = [output_dir / 'funcworks' / 'sub-{}'.format(s) / 'log' / run_uuid
-        #                    for s in subject_list]
+        #    crashfolders = [
+        #        output_dir / 'funcworks' / 'sub-{}'.format(s) /
+        #        'log' / run_uuid for s in subject_list]
         #   for crashfolder in crashfolders:
         #        for crashfile in crashfolder.glob('crash*.*'):
         #            process_crashfile(crashfile)
@@ -197,13 +219,15 @@ def build_workflow(opts, retval):
         build_log.error(
             'The selected output folder is the same as the input BIDS folder. '
             'Please modify the output path (suggestion: %s).',
-            bids_dir / 'derivatives' / ('funcworks-%s' % __version__.split('+')[0]))
+            (bids_dir / 'derivatives' /
+             ('funcworks-%s' % __version__.split('+')[0])))
         retval['return_code'] = 1
         return retval
 
     if bids_dir in opts.work_dir.parents:
         build_log.error(
-            'The selected working directory is a subdirectory of the input BIDS folder. '
+            'The selected working directory is a subdirectory '
+            'of the input BIDS folder. '
             'Please modify the output path.')
         retval['return_code'] = 1
         return retval
@@ -307,19 +331,20 @@ def build_workflow(opts, retval):
             raise ValueError('Default Model File not Found')
     else:
         model_file = opts.model_file
-    retval['workflow'] = init_funcworks_wf(model_file=model_file,
-                                           bids_dir=opts.bids_dir,
-                                           output_dir=opts.output_dir,
-                                           work_dir=opts.work_dir,
-                                           database_path=str(database_path),
-                                           participants=retval['participant_label'],
-                                           analysis_level=opts.analysis_level,
-                                           smoothing=opts.smoothing,
-                                           derivatives=opts.derivatives,
-                                           run_uuid=run_uuid,
-                                           use_rapidart=opts.use_rapidart,
-                                           detrend_poly=opts.detrend_poly,
-                                           align_volumes=opts.align_volumes)
+    retval['workflow'] = init_funcworks_wf(
+        model_file=model_file,
+        bids_dir=opts.bids_dir,
+        output_dir=opts.output_dir,
+        work_dir=opts.work_dir,
+        database_path=str(database_path),
+        participants=retval['participant_label'],
+        analysis_level=opts.analysis_level,
+        smoothing=opts.smoothing,
+        derivatives=opts.derivatives,
+        run_uuid=run_uuid,
+        use_rapidart=opts.use_rapidart,
+        detrend_poly=opts.detrend_poly,
+        align_volumes=opts.align_volumes)
     retval['return_code'] = 0
 
     #logs_path = Path(output_dir) / 'funcworks' / 'logs'
