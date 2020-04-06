@@ -22,7 +22,7 @@ jobs:
           name: Style check
           command: |
             source activate venv
-            flake8 --max-line-length=100 --exclude=versioneer.py /tmp/src/cis-bidsify
+            flake8 --max-line-length=79 --exclude=versioneer.py  --ignore=W503 /tmp/src/cis-bidsify
 workflows:
   version: 2.1
   build_test:
