@@ -129,11 +129,10 @@ ENV PATH=$ANTSPATH:$PATH
 #-------------------------
 # Create conda environment
 #-------------------------
-RUN conda create -y -q --name neuro python=3 \
-                                    traits=4.6.0 \
+RUN conda create -y -q --name neuro python=3.7 \
     && sync && conda clean -tipsy && sync \
     && /bin/bash -c "source activate neuro \
-      && pip install numpy pandas pybids==0.10.1 nibabel python-dateutil niworkflows nipype==1.4.2 traits==5.2.0 /scripts/"\
+      && pip install /scripts/"\
     && sync \
     && sed -i '$isource activate neuro' $ND_ENTRYPOINT
 
