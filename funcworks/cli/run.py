@@ -1,7 +1,7 @@
 """
 Main run script
 """
-#pylint: disable=C0103,R0913,R0914,W0404,C0116,W0212,W0613,W0611,W1202,C0415
+# pylint: disable=C0103,R0913,R0914,W0404,C0116,W0212,W0613,W0611,W1202,C0415
 import os
 import gc
 import sys
@@ -19,13 +19,15 @@ logging.addLevelName(25, 'IMPORTANT')  # Add a new level between INFO and WARNIN
 logging.addLevelName(15, 'VERBOSE')  # Add a new level between INFO and DEBUG
 logger = logging.getLogger('cli')
 
+
 def check_deps(workflow):
     from nipype.utils.filemanip import which
     return sorted(
         (node.interface.__class__.__name__, node.interface._cmd)
         for node in workflow._get_all_nodes()
-        if (hasattr(node.interface, '_cmd') and
-            which(node.interface._cmd.split()[0]) is None))
+        if (
+            hasattr(node.interface, '_cmd')
+            and which(node.interface._cmd.split()[0]) is None))
 
 
 def _warn_redirect(message, category, filename, lineno, file=None, line=None):
@@ -98,7 +100,6 @@ def get_parser():
 
 def main():
     """Entry Point"""
-    from nipype import logging as nlogging
     from multiprocessing import set_start_method, Process, Manager
     set_start_method('spawn')
     warnings.showwarning = _warn_redirect
@@ -107,10 +108,11 @@ def main():
     exec_env = os.name
 
     sentry_sdk = None
-    #if not opts.notrack:
-    #    import sentry_sdk
-    #    from ..utils.sentry import sentry_setup
-    #    sentry_setup(opts, exec_env)
+    #
+    # if not opts.notrack:
+    #     import sentry_sdk
+    #     from ..utils.sentry import sentry_setup
+    #     sentry_setup(opts, exec_env)
 
     if opts.analysis_level not in ['run', 'session', 'participant', 'dataset']:
         raise ValueError(
@@ -125,14 +127,14 @@ def main():
         p.join()
 
         retcode = p.exitcode or retval.get('return_code', 0)
-
-        bids_dir = retval.get('bids_dir')
-        output_dir = retval.get('output_dir')
-        work_dir = retval.get('work_dir')
-        subject_list = retval.get('participant_label', None)
-        funcworks_wf = retval.get('workflow', None)
-        run_uuid = retval.get('run_uuid', None)
+        #
+        # bids_dir = retval.get('bids_dir')
+        # output_dir = retval.get('output_dir')
+        # work_dir = retval.get('work_dir')
+        # subject_list = retval.get('participant_label', None)
+        # run_uuid = retval.get('run_uuid', None)
         plugin_settings = retval.get('plugin_settings')
+        funcworks_wf = retval.get('workflow', None)
 
     retcode = retcode or int(funcworks_wf is None)
     if retcode != 0:
@@ -146,25 +148,27 @@ def main():
         sys.exit(2)
     # Clean up master process before running workflow, which may create forks
     gc.collect()
-
-    errno = 1  # Default is error exit unless otherwise set
-    #funcworks_wf.write_graph(graph2use="colored", format='png')
+    # errno = 1
+    # Default is error exit unless otherwise set
+    # funcworks_wf.write_graph(graph2use="colored", format='png')
     try:
         funcworks_wf.run(**plugin_settings)
     except Exception as e:
-        #if not opts.notrack:
-        #    from ..utils.sentry import process_crashfile
-        #    crashfolders = [
-        #        output_dir / 'funcworks' / 'sub-{}'.format(s) /
-        #        'log' / run_uuid for s in subject_list]
-        #   for crashfolder in crashfolders:
-        #        for crashfile in crashfolder.glob('crash*.*'):
-        #            process_crashfile(crashfile)
         #
-        #   if "Workflow did not execute cleanly" not in str(e):
-        #        sentry_sdk.capture_exception(e)
+        # if not opts.notrack:
+        #     from ..utils.sentry import process_crashfile
+        #     crashfolders = [
+        #         output_dir / 'funcworks' / 'sub-{}'.format(s) /
+        #         'log' / run_uuid for s in subject_list]
+        #    for crashfolder in crashfolders:
+        #         for crashfile in crashfolder.glob('crash*.*'):
+        #             process_crashfile(crashfile)
+        #
+        #    if "Workflow did not execute cleanly" not in str(e):
+        #         sentry_sdk.capture_exception(e)
         logger.critical('FUNCWorks failed: %s', e)
         raise
+
 
 def build_workflow(opts, retval):
     """
@@ -179,7 +183,7 @@ def build_workflow(opts, retval):
     from bids import BIDSLayout
 
     from nipype import logging as nlogging, config as ncfg
-    #from ..__about__ import __version__
+    # from ..__about__ import __version__
     from ..workflows.base import init_funcworks_wf
     from .. import __version__
 
@@ -205,15 +209,13 @@ def build_workflow(opts, retval):
         layout = BIDSLayout(
             bids_dir, derivatives=opts.derivatives, validate=True,
             database_file=database_path,
-            reset_database=True
-        )
+            reset_database=True)
     else:
         database_path = opts.database_path
         layout = BIDSLayout(
             bids_dir, derivatives=opts.derivatives, validate=True,
             database_file=database_path,
-            reset_database=False
-        )
+            reset_database=False)
 
     if output_dir == bids_dir:
         build_log.error(
@@ -253,26 +255,22 @@ def build_workflow(opts, retval):
         with open(opts.use_plugin) as f:
             plugin_settings = json.load(f)
 
-
     # Resource management options
     # Note that we're making strong assumptions about valid plugin args
     # This may need to be revisited if people try to use batch plugins
-    #nthreads = plugin_settings['plugin_args'].get('n_procs')
+    # nthreads = plugin_settings['plugin_args'].get('n_procs')
     # Permit overriding plugin config with specific CLI options
-    #if nthreads is None or opts.nthreads is not None:
+    # if nthreads is None or opts.nthreads is not None:
     #    nthreads = opts.nthreads
     #    if nthreads is None or nthreads < 1:
     #        nthreads = cpu_count()
     #    plugin_settings['plugin_args']['n_procs'] = nthreads
-
-    #if opts.mem_mb:
+    # if opts.mem_mb:
     #    plugin_settings['plugin_args']['memory_gb'] = opts.mem_mb / 1024
-
-    #omp_nthreads = opts.omp_nthreads
-    #if omp_nthreads == 0:
+    # omp_nthreads = opts.omp_nthreads
+    # if omp_nthreads == 0:
     #    omp_nthreads = min(nthreads - 1 if nthreads > 1 else cpu_count(), 8)
-
-    #if 1 < nthreads < omp_nthreads:
+    # if 1 < nthreads < omp_nthreads:
     #    build_log.warning(
     #        'Per-process threads (--omp-nthreads=%d) exceed total '
     #        'threads (--nthreads/--n_cpus=%d)', omp_nthreads, nthreads)
@@ -295,29 +293,28 @@ def build_workflow(opts, retval):
             'crashdump_dir': str(log_dir),
             'crashfile_format': 'txt',
             'get_linked_libs': False,
-            #'stop_on_first_crash': opts.stop_on_first_crash,
+            # 'stop_on_first_crash': opts.stop_on_first_crash,
         },
         'monitoring': {
-            #'enabled': opts.resource_monitor,
+            # 'enabled': opts.resource_monitor,
             'sample_frequency': '0.5',
             'summary_append': True,
         }
     })
-
-    #if opts.resource_monitor:
-    #    ncfg.enable_resource_monitor()
-
+    #
+    # if opts.resource_monitor:
+    #     ncfg.enable_resource_monitor()
     # Called with reports only
-    #if opts.reports_only:
-    #    build_log.log(25, 'Running --reports-only on participants %s',
-    #                  ', '.join(opts.participant_label))
-    #    if opts.run_uuid is not None:
-    #        run_uuid = opts.run_uuid
-    #        retval['run_uuid'] = run_uuid
-    #    retval['return_code'] = generate_reports(
-    #        opts.participant_label, output_dir, work_dir, run_uuid,
-    #        packagename='funcworks')
-    #    return retval
+    # if opts.reports_only:
+    #     build_log.log(25, 'Running --reports-only on participants %s',
+    #                   ', '.join(opts.participant_label))
+    #     if opts.run_uuid is not None:
+    #         run_uuid = opts.run_uuid
+    #         retval['run_uuid'] = run_uuid
+    #     retval['return_code'] = generate_reports(
+    #         opts.participant_label, output_dir, work_dir, run_uuid,
+    #         packagename='funcworks')
+    #     return retval
 
     # Build main workflow
     build_log.log(25, INIT_MSG(version=__version__,
@@ -346,9 +343,8 @@ def build_workflow(opts, retval):
         detrend_poly=opts.detrend_poly,
         align_volumes=opts.align_volumes)
     retval['return_code'] = 0
-
-    #logs_path = Path(output_dir) / 'funcworks' / 'logs'
-    #boilerplate = retval['workflow'].visit_desc()
+    # logs_path = Path(output_dir) / 'funcworks' / 'logs'
+    # boilerplate = retval['workflow'].visit_desc()
     """
     if boilerplate:
         citation_files = {
@@ -369,6 +365,7 @@ def build_workflow(opts, retval):
                       'include the following boilerplate:\n\n%s', boilerplate)
     """
     return retval
+
 
 if __name__ == '__main__':
     main()

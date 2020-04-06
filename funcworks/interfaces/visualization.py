@@ -1,7 +1,7 @@
 """
 Run and Session Level Visualization interface
 """
-#pylint: disable=E1101, C0115
+# pylint: disable=E1101, C0115
 from pathlib import Path
 from nipype.interfaces.base import (BaseInterfaceInputSpec,
                                     TraitedSpec, traits, File,
@@ -14,6 +14,7 @@ from matplotlib import pyplot as plt
 from bids.layout.writing import build_path
 sns.set_style('white')
 
+
 class PlotMatricesInputSpec(BaseInterfaceInputSpec):
     run_info = traits.Any(desc='List of regressors of no interest')
     mat_file = File(exists=True,
@@ -22,6 +23,7 @@ class PlotMatricesInputSpec(BaseInterfaceInputSpec):
                     desc='Contrast File Produces by Generate Model')
     entities = traits.Dict(desc='Dictionary containing BIDS file entities')
     output_dir = Directory(desc='Directory for Output')
+
 
 class PlotMatricesOutputSpec(TraitedSpec):
     design_matrix = traits.Any(desc='Path to design matrix')
@@ -34,11 +36,10 @@ class PlotMatricesOutputSpec(TraitedSpec):
 
 
 class PlotMatrices(IOBase):
-
     input_spec = PlotMatricesInputSpec
     output_spec = PlotMatricesOutputSpec
-
     _always_run = True
+    
     def _list_outputs(self):
         ents = self.inputs.entities
         run_info = self.inputs.run_info
@@ -75,7 +76,7 @@ class PlotMatrices(IOBase):
                                            path_pattern=image_pattern,
                                            regressor_names=regressor_names,
                                            cmap='RdBu_r')
-        ents.update({'suffix':'design'})
+        ents.update({'suffix': 'design'})
         design_path = output_dir / build_path(
             ents, path_patterns=design_matrix_pattern)
         design_path.parent.mkdir(exist_ok=True, parents=True)

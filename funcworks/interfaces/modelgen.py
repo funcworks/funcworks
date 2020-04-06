@@ -4,12 +4,12 @@ from bids.layout.writing import build_path
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec, Bunch, TraitedSpec,
     InputMultiPath, OutputMultiPath, File,
-    traits, Directory
-    )
+    traits, Directory)
 from nipype.interfaces.io import IOBase
 import nibabel as nb
 import numpy as np
 from ..utils import snake_to_camel
+
 
 class GetRunModelInfoInputSpec(BaseInterfaceInputSpec):
     bids_dir = Directory(exists=True, mandatory=True)
@@ -21,6 +21,7 @@ class GetRunModelInfoInputSpec(BaseInterfaceInputSpec):
     align_volumes = traits.Any(default=None,
                                desc=('Target volume for functional realignment',
                                      'if not value is specified, will not functional file'))
+
 
 class GetRunModelInfoOutputSpec(TraitedSpec):
     run_info = traits.Any(desc='Model Info required to construct Run Level Model')
@@ -35,12 +36,12 @@ class GetRunModelInfoOutputSpec(TraitedSpec):
     reference_image = File(exists=True, desc='Reference Image for functional realignment')
     brain_mask = File(exists=True, desc='Brain mask for functional image')
 
+
 class GetRunModelInfo(IOBase):
     '''Grabs EV files for subject based on contrasts of interest'''
     input_spec = GetRunModelInfoInputSpec
     output_spec = GetRunModelInfoOutputSpec
-
-    #_always_run = True
+    # _always_run = True
 
     def _list_outputs(self):
         import json
@@ -67,7 +68,7 @@ class GetRunModelInfo(IOBase):
         n_vols = len(pd.read_csv(regressors_file))
         outputs['run_entities'].update({
             'Volumes': n_vols,
-            'DegreesOfFreedom' : (n_vols - len(all_regressors))})
+            'DegreesOfFreedom': (n_vols - len(all_regressors))})
         outputs['contrast_entities'] = self._get_entities(
             contrasts=outputs['run_contrasts'],
             run_entities=outputs['run_entities'])
@@ -81,8 +82,8 @@ class GetRunModelInfo(IOBase):
         return outputs
 
     def _get_required_files(self):
-        #A workaround to a current issue in pybids
-        #that causes massive resource use when indexing derivative tsv files
+        # A workaround to a current issue in pybids
+        # that causes massive resource use when indexing derivative tsv files
         from pathlib import Path
         from bids.layout import parse_file_entities
         from bids.layout.writing import build_path
@@ -104,7 +105,6 @@ class GetRunModelInfo(IOBase):
             entities, path_patterns=confounds_pattern)
         meta_file = func.parent / build_path(
             entities, path_patterns=meta_pattern)
-        #headway
         events_file = Path(self.inputs.bids_dir) / build_path(
             entities, path_patterns=events_pattern)
         ents = entities.copy()
@@ -148,8 +148,8 @@ class GetRunModelInfo(IOBase):
 
         run_info = Bunch(**run_info)
         return (run_info,
-                run_info.conditions, #pylint: disable=E1101
-                run_info.regressor_names) #pylint: disable=E1101
+                run_info.conditions,  # pylint: disable=E1101
+                run_info.regressor_names)  # pylint: disable=E1101
 
     def _get_contrasts(self, event_names):
         """
@@ -191,7 +191,7 @@ class GetRunModelInfo(IOBase):
 
     @staticmethod
     def _get_motion_parameters(regressors_file):
-        import os #pylint: disable=W0621,W0404
+        import os  # pylint: disable=W0621,W0404
         import pandas as pd
         motion_params_path = os.path.join(
             os.getcwd(),
@@ -199,8 +199,8 @@ class GetRunModelInfo(IOBase):
                                                       'motparams'))
 
         confound_data = pd.read_csv(regressors_file, sep='\t')
-        #Motion data gets formatted FSL style, with x, y, z rotation,
-        #then x,y,z translation
+        # Motion data gets formatted FSL style, with x, y, z rotation,
+        # then x,y,z translation
         motion_data = confound_data[['rot_x', 'rot_y', 'rot_z',
                                      'trans_x', 'trans_y', 'trans_z']]
         motion_data.to_csv(
@@ -213,7 +213,7 @@ class GetRunModelInfo(IOBase):
         contrast_entities = []
         contrast_names = [contrast[0] for contrast in contrasts]
         for contrast_name in contrast_names:
-            run_entities.update({'contrast':contrast_name})
+            run_entities.update({'contrast': contrast_name})
             contrast_entities.append(run_entities.copy())
         return contrast_entities
 
@@ -234,6 +234,7 @@ class GetRunModelInfo(IOBase):
 
         return poly_names, poly_arrays
 
+
 class GenerateHigherInfoInputSpec(BaseInterfaceInputSpec):
     contrast_maps = InputMultiPath(
         File(exists=True), desc='List of statmaps from previous level')
@@ -242,6 +243,7 @@ class GenerateHigherInfoInputSpec(BaseInterfaceInputSpec):
     model = traits.Dict(desc='Step level information from the model file')
     align_volumes = traits.Any(
         default=None, desc='Run to which volumes were aligned at level 1')
+
 
 class GenerateHigherInfoOutputSpec(TraitedSpec):
     effect_maps = traits.List()
@@ -252,6 +254,7 @@ class GenerateHigherInfoOutputSpec(TraitedSpec):
     covariance_matrices = traits.List()
     contrast_metadata = traits.List()
     brain_mask = traits.List()
+
 
 class GenerateHigherInfo(IOBase):
     input_spec = GenerateHigherInfoInputSpec
@@ -279,18 +282,18 @@ class GenerateHigherInfo(IOBase):
         contrast_zip = zip(self.inputs.contrast_maps,
                            self.inputs.contrast_metadata)
         organization = {}
-        #split_fields = []
-        if "Transformations" in model:
-            if model['Transformations']['Name'] == 'Split':
-                split_fields = []
+        # split_fields = []
+        # if "Transformations" in model:
+        #     if model['Transformations']['Name'] == 'Split':
+        #         split_fields = []
         for contrast_file, contrast_entities in contrast_zip:
             if contrast_entities['contrast'] not in organization:
                 organization[contrast_entities['contrast']] = []
             organization[contrast_entities['contrast']].append(
                 {'File': contrast_file, 'Metadata': contrast_entities})
 
-        #for split_field in split_fields:
-        #    pass
+        # for split_field in split_fields:
+        #     pass
         dummy_contrasts = []
         if "DummyContrasts" in model:
             if 'Conditions' in model['DummyContrasts']:
@@ -317,8 +320,9 @@ class GenerateHigherInfo(IOBase):
                 if bids_info['Metadata']['stat'] == 'effect':
                     open_file = nb.load(bids_info['File'])
                     affine = open_file.affine
-                    dof_file = (np.ones_like(open_file.get_fdata())
-                                * bids_info['Metadata']['DegreesOfFreedom'])
+                    dof_file = (
+                        np.ones_like(open_file.get_fdata())
+                        * bids_info['Metadata']['DegreesOfFreedom'])
                     dof_file = nb.nifti1.Nifti1Image(dof_file, affine)
                     dcontrast_info['dceffect_maps'].append(open_file)
                     dcontrast_info['dcdof_maps'].append(dof_file)
@@ -350,7 +354,6 @@ class GenerateHigherInfo(IOBase):
                 maps_info[f'{stat}_maps'].append(str(map_path))
         return (maps_info['map_entities'], maps_info['effect_maps'],
                 maps_info['variance_maps'], maps_info['dof_maps'])
-
 
     def _produce_matrices(self, contrast_entities):
         matrix_paths = {'design_matrices': [],

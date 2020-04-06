@@ -1,10 +1,10 @@
-#pylint: disable=R0913,R0914,C0114,C0116,W0212
+# pylint: disable=R0913,R0914,C0114,C0116,W0212
 import json
 from pathlib import Path
 from copy import deepcopy
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
-from .. import __version__
 from .fsl import fsl_run_level_wf, fsl_higher_level_wf
+
 
 def init_funcworks_wf(model_file,
                       bids_dir,
@@ -61,8 +61,9 @@ def init_funcworks_wf(model_file,
             detrend_poly=detrend_poly,
             align_volumes=align_volumes,
             name=f'single_subject_{subject_id}_wf')
-        crash_dir = (Path(output_dir) / 'funcworks' / 'logs' /
-                     model['Name'] / f'sub-{subject_id}' / run_uuid)
+        crash_dir = (
+            Path(output_dir) / 'funcworks'
+            / 'logs' / model['Name'] / f'sub-{subject_id}' / run_uuid)
         crash_dir.mkdir(exist_ok=True, parents=True)
 
         single_subject_wf.config['execution']['crashdump_dir'] = str(crash_dir)
@@ -73,6 +74,7 @@ def init_funcworks_wf(model_file,
         funcworks_wf.add_nodes([single_subject_wf])
 
     return funcworks_wf
+
 
 def init_funcworks_subject_wf(model,
                               bids_dir,
@@ -91,7 +93,8 @@ def init_funcworks_subject_wf(model,
                               name):
 
     workflow = Workflow(name=name)
-    #stage = None
+    stage = None
+    pre_level = None
     for step in model['Steps']:
         level = step['Level']
         if level == 'run':

@@ -1,7 +1,7 @@
 """
 Run and Session Level WFs in FSL
 """
-#pylint: disable=R0913,R0914
+# pylint: disable=R0913, R0914
 from pathlib import Path
 from nipype.pipeline import engine as pe
 from nipype.interfaces import fsl
@@ -52,8 +52,8 @@ def fsl_run_level_wf(model,
             base_dir=bids_dir, subject=subject_id,
             index_derivatives=derivatives,
             database_path=database_path,
-            output_query={'func': {**{'datatype':'func', 'desc':'preproc',
-                                      'extension':'nii.gz', 'suffix':'bold'},
+            output_query={'func': {**{'datatype': 'func', 'desc': 'preproc',
+                                      'extension': 'nii.gz', 'suffix': 'bold'},
                                    **fixed_entities}}),
         name='func_select')
 
@@ -96,7 +96,8 @@ def fsl_run_level_wf(model,
 
     estimate_model = pe.MapNode(
         fsl.FILMGLS(environ={'FSLOUTPUTTYPE': 'NIFTI_GZ'},
-                    mask_size=5, threshold=0.0, #smooth_autocorr=True
+                    mask_size=5, threshold=0.0,
+                    # smooth_autocorr=True
                     output_type='NIFTI_GZ', results_dir='results',
                     autocorr_noestimate=True),
         iterfield=['design_file', 'in_file', 'tcon_file'],
@@ -143,9 +144,8 @@ def fsl_run_level_wf(model,
         fsl.SUSAN(fwhm=smoothing_fwhm, dimension=dimensionality),
         iterfield=['in_file', 'brightness_threshold', 'usans'],
         name='smooth_susan')
-
-    #Exists solely to correct undesirable behavior of FSL
-    #that results in loss of constant columns
+    # Exists solely to correct undesirable behavior of FSL
+    # that results in loss of constant columns
     correct_matrices = pe.MapNode(
         Function(input_names=['design_matrix'],
                  output_names=['design_matrix'],
@@ -169,9 +169,9 @@ def fsl_run_level_wf(model,
             field_to_metadata_map={
                 'effect_maps': {'stat': 'effect'},
                 'variance_maps': {'stat': 'variance'},
-                #'pvalue_maps': {'stat': 'p'},
+                # 'pvalue_maps': {'stat': 'p'},
                 'zscore_maps': {'stat': 'z'},
-                'tstat_maps': {'stat' : 't'}
+                'tstat_maps': {'stat': 't'}
             }),
         name=f'collate_{level}_outputs')
 
@@ -191,8 +191,8 @@ def fsl_run_level_wf(model,
         IdentityInterface(
             fields=['contrast_metadata', 'contrast_maps', 'brain_mask']),
         name=f'wrangle_{level}_outputs')
-    #Setup connections among nodes
 
+    # Setup connections among nodes
     workflow.connect([
         (bdg, realign_runs, [('func', 'in_file')]),
         (bdg, get_info, [('func', 'functional_file')]),
@@ -307,9 +307,9 @@ def fsl_run_level_wf(model,
 def fsl_higher_level_wf(output_dir,
                         work_dir,
                         step,
-                        #smoothing_fwhm=None,
+                        # smoothing_fwhm=None,
+                        # smoothing_type=None,
                         smoothing_level=None,
-                        #smoothing_type=None,
                         name='fsl_higher_level_wf'):
     """
     This workflow generates processes functional_data across a
@@ -361,9 +361,9 @@ def fsl_higher_level_wf(output_dir,
             field_to_metadata_map={
                 'effect_maps': {'stat': 'effect'},
                 'variance_maps': {'stat': 'variance'},
-                #'pvalue_maps': {'stat': 'p'},
+                # 'pvalue_maps': {'stat': 'p'},
                 'zscore_maps': {'stat': 'z'},
-                'tstat_maps': {'stat' : 't'}
+                'tstat_maps': {'stat': 't'}
             }),
         name=f'collate_{level}_outputs')
 
