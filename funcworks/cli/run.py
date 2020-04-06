@@ -307,6 +307,10 @@ def build_workflow(opts, retval):
             raise ValueError('Default Model File not Found')
     else:
         model_file = opts.model_file
+    if opts.analysis_level != 'session':
+        raise NotImplementedError(
+            '{level} level modelling currently unavailable'.format(
+                level=opts.analysis_level))
     retval['workflow'] = init_funcworks_wf(model_file=model_file,
                                            bids_dir=opts.bids_dir,
                                            output_dir=opts.output_dir,
