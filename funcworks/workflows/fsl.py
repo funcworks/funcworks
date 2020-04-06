@@ -14,7 +14,6 @@ from ..interfaces.visualization import PlotMatrices
 from .. import utils
 
 
-
 def fsl_run_level_wf(model,
                      step,
                      bids_dir,

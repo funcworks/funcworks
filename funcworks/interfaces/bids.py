@@ -214,7 +214,9 @@ class BIDSDataGrabber(LibraryBaseInterface, IOBase):
         if infields is None:
             from bids import layout as bidslayout
 
-            bids_config = Path(bidslayout.__file__).parent / "config" / "bids.json"
+            bids_config = (
+                Path(bidslayout.__file__).parent
+                / "config" / "bids.json")
             bids_config = json.load(open(bids_config, "r"))
             infields = [i["name"] for i in bids_config["entities"]]
 

@@ -70,7 +70,7 @@ def get_parser():
             "`iso` (isotropic). "
             "e.g., `--smoothing 5:run:iso` will perform a 5mm FWHM isotropic "
             "smoothing on run-level maps before evaluating the dataset level.")
-        )
+    )
     parser.add_argument(
         '-w', '--work_dir', action='store', type=Path,
         default=mkdtemp(),

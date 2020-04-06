@@ -15,25 +15,34 @@ class GetRunModelInfoInputSpec(BaseInterfaceInputSpec):
     bids_dir = Directory(exists=True, mandatory=True)
     functional_file = File(exists=True, mandatory=True)
     model = traits.Dict(mandatory=True)
-    detrend_poly = traits.Any(default=None,
-                              desc=('Legendre polynomials to regress out'
-                                    'for temporal filtering'))
-    align_volumes = traits.Any(default=None,
-                               desc=('Target volume for functional realignment',
-                                     'if not value is specified, will not functional file'))
+    detrend_poly = traits.Any(
+        default=None,
+        desc=('Legendre polynomials to regress out'
+              'for temporal filtering'))
+    align_volumes = traits.Any(
+        default=None,
+        desc=('Target volume for functional realignment',
+              'if not value is specified, will not functional file'))
 
 
 class GetRunModelInfoOutputSpec(TraitedSpec):
-    run_info = traits.Any(desc='Model Info required to construct Run Level Model')
-    run_contrasts = traits.List(desc='List of tuples describing each contrasts')
+    run_info = traits.Any(
+        desc='Model Info required to construct Run Level Model')
+    run_contrasts = traits.List(
+        desc='List of tuples describing each contrasts')
     run_entities = traits.Dict(desc='Run specific BIDS Entities')
-    contrast_entities = OutputMultiPath(traits.Dict(),
-                                        desc='Contrast specific list of entities')
-    motion_parameters = OutputMultiPath(File(exists=True),
-                                        desc='File containing first six motion regressors')
+    contrast_entities = OutputMultiPath(
+        traits.Dict(),
+        desc='Contrast specific list of entities')
+    motion_parameters = OutputMultiPath(
+        File(exists=True),
+        desc='File containing first six motion regressors')
     repetition_time = traits.Float(desc='Repetition Time for the dataset')
-    contrast_names = traits.List(desc='List of Contrast Names to pass to higher levels')
-    reference_image = File(exists=True, desc='Reference Image for functional realignment')
+    contrast_names = traits.List(
+        desc='List of Contrast Names to pass to higher levels')
+    reference_image = File(
+        exists=True,
+        desc='Reference Image for functional realignment')
     brain_mask = File(exists=True, desc='Brain mask for functional image')
 
 
