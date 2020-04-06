@@ -51,7 +51,7 @@ def reshape_ra(run_info, func, outlier_files, contrast_entities):
         curr_dof = cont_ents['DegreesOfFreedom']
         cont_ents.update({'DegreesOfFreedom': curr_dof - len(outlier_frame)})
         contrast_entities.append(cont_ents)
-    return run_info
+    return run_info, contrast_entities
 
 
 def correct_matrix(design_matrix):

@@ -89,6 +89,7 @@ class GetRunModelInfo(IOBase):
             outputs['run_info'].regressors.extend(polynomial_arrays)
 
         return outputs
+      
 
     def _get_required_files(self):
         # A workaround to a current issue in pybids

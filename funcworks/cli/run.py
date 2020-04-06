@@ -328,6 +328,7 @@ def build_workflow(opts, retval):
             raise ValueError('Default Model File not Found')
     else:
         model_file = opts.model_file
+
     retval['workflow'] = init_funcworks_wf(
         model_file=model_file,
         bids_dir=opts.bids_dir,
@@ -342,6 +343,7 @@ def build_workflow(opts, retval):
         use_rapidart=opts.use_rapidart,
         detrend_poly=opts.detrend_poly,
         align_volumes=opts.align_volumes)
+
     retval['return_code'] = 0
     # logs_path = Path(output_dir) / 'funcworks' / 'logs'
     # boilerplate = retval['workflow'].visit_desc()
