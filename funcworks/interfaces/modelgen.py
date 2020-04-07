@@ -200,21 +200,20 @@ class GetRunModelInfo(IOBase):
 
     @staticmethod
     def _get_motion_parameters(regressor_file):
-        import os  # pylint: disable=W0621,W0404
+        from pathlib import Path
         import pandas as pd
-        motion_params_path = os.path.join(
-            os.getcwd(),
-            os.path.basename(regressor_file).replace('regressors',
-                                                      'motparams'))
+        regressor_file = Path(regressor_file)
+        motparams_path = (Path.cwd()
+                          / str(regressor_file.name).replace('regressors',
+                                                             'motparams'))
 
         confound_data = pd.read_csv(regressor_file, sep='\t')
         # Motion data gets formatted FSL style, with x, y, z rotation,
         # then x,y,z translation
         motion_data = confound_data[['rot_x', 'rot_y', 'rot_z',
                                      'trans_x', 'trans_y', 'trans_z']]
-        motion_data.to_csv(
-            motion_params_path, sep='\t', header=None, index=None)
-        motion_params = motion_params_path
+        motion_data.to_csv(motparams_path, sep='\t', header=None, index=None)
+        motion_params = motparams_path
         return motion_params
 
     @staticmethod
