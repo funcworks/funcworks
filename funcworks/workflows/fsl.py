@@ -153,33 +153,33 @@ def fsl_run_level_wf(model,
                  output_names=['design_matrix'],
                  function=utils.correct_matrix),
         iterfield=['design_matrix'],
+        run_without_submitting=True,
         name=f'correct_{level}_matrices')
 
     collate = pe.Node(
         MergeAll(
-            ['effect_maps', 'variance_maps', 'tstat_maps',
-             'zscore_maps', 'contrast_metadata'],
+            fields=[
+                'effect_maps', 'variance_maps', 'tstat_maps',
+                'zscore_maps', 'contrast_metadata'],
             check_lengths=True),
         name=f'collate_{level}')
 
     collate_outputs = pe.Node(
         CollateWithMetadata(
             fields=[
-                'effect_maps', 'variance_maps',
-                'tstat_maps', 'zscore_maps'
-            ],
+                'effect_maps', 'variance_maps', 'tstat_maps', 'zscore_maps'],
             field_to_metadata_map={
                 'effect_maps': {'stat': 'effect'},
                 'variance_maps': {'stat': 'variance'},
                 # 'pvalue_maps': {'stat': 'p'},
                 'zscore_maps': {'stat': 'z'},
-                'tstat_maps': {'stat': 't'}
-            }),
+                'tstat_maps': {'stat': 't'}}),
         name=f'collate_{level}_outputs')
 
     plot_matrices = pe.MapNode(
         PlotMatrices(output_dir=output_dir),
         iterfield=['mat_file', 'con_file', 'entities', 'run_info'],
+        run_without_submitting=True,
         name=f'plot_{level}_matrices')
 
     ds_contrast_maps = pe.MapNode(
