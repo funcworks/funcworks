@@ -249,7 +249,9 @@ class GenerateHigherInfoInputSpec(BaseInterfaceInputSpec):
     contrast_metadata = InputMultiPath(
         traits.Dict(desc='Contrast names inherited from previous levels'))
     model = traits.Dict(desc='Step level information from the model file')
-    derivatives = Directory(desc='fmriPrep derivatives directory')
+    derivatives = traits.Any(
+        [Directory, traits.Str, traits.Bool],
+        desc='fmriPrep derivatives directory')
     align_volumes = traits.Any(
         default=None,
         desc=('Target volume for functional realignment',
@@ -274,6 +276,11 @@ class GenerateHigherInfo(IOBase):
     _always_run = True
 
     def _list_outputs(self):
+        if isinstance(self.inputs.derivatives, list):
+            derivatives = [
+                x for x in self.inputs.derivatives
+                if 'fmriprep' in x]
+            derivatives = derivatives[0]
         organization, dummy_contrasts = self._get_organization()
         (contrast_entities, effect_maps,
          variance_maps, dof_maps,
