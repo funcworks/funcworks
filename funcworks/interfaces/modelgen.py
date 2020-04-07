@@ -101,14 +101,14 @@ class GetRunModelInfo(IOBase):
         entities.update({'run': '{:02}'.format(entities['run'])})
         confounds_pattern = ('sub-{subject}_[ses-{session}_]task-{task}_'
                              'run-{run}_desc-confounds_regressors.tsv')
-        meta_pattern = ('sub-{subject}_[ses-{session}_]_task-{task}_'
+        meta_pattern = ('sub-{subject}_[ses-{session}_]task-{task}_'
                         'run-{run}_[space-{space}_]desc-preproc_bold.json')
         events_pattern = ('sub-{subject}/[ses-{session}/]{datatype}/'
                           'sub-{subject}_[ses-{session}_]'
                           'task-{task}_run-{run}_events.tsv')
         ref_pattern = ('sub-{subject}_[ses-{session}_]task-{task}_'
                        'run-{run}_[space-{space}_]boldref.nii.gz')
-        mask_pattern = ('sub-{subject}[_ses-{session}]_task-{task}'
+        mask_pattern = ('sub-{subject}_[ses-{session}_]task-{task}_'
                         'run-{run}_[space-{space}_]desc-brain_mask.nii.gz')
         regressors_file = func.parent / build_path(
             entities, path_patterns=confounds_pattern)

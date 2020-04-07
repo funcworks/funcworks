@@ -129,6 +129,9 @@ ENV PATH=$ANTSPATH:$PATH
 #-------------------------
 # Create conda environment
 #-------------------------
+COPY ./ /scripts/
+USER root
+RUN chmod 755 -R /scripts/
 RUN conda create -y -q --name neuro python=3.7 \
     && sync && conda clean -tipsy && sync \
     && /bin/bash -c "source activate neuro \
@@ -161,11 +164,5 @@ ENV SINGULARITY_TMPDIR /scratch
 #----------------------
 # Set entrypoint script
 #----------------------
-COPY ./ /scripts/
-USER root
-RUN chmod 755 -R /scripts/
-RUN /bin/bash -c "source activate neuro \
-    && cd /scripts \
-    && python setup.py install"
 USER neuro
 ENTRYPOINT ["/neurodocker/startup.sh", "funcworks"]
