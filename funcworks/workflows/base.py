@@ -120,6 +120,7 @@ def init_funcworks_subject_wf(model,
                 step=step,
                 output_dir=output_dir,
                 work_dir=work_dir,
+                derivatives=derivatives,
                 # smoothing_fwhm=smoothing_fwhm,
                 smoothing_level=smoothing_level,
                 # smoothing_type=smoothing_type,
@@ -129,9 +130,7 @@ def init_funcworks_subject_wf(model,
                     (f'wrangle_{pre_level}_outputs.contrast_maps',
                      f'wrangle_{level}_inputs.contrast_maps'),
                     (f'wrangle_{pre_level}_outputs.contrast_metadata',
-                     f'wrangle_{level}_inputs.contrast_metadata'),
-                    (f'wrangle_{pre_level}_outputs.brain_mask',
-                     f'wrangle_{level}_inputs.brain_mask')])
+                     f'wrangle_{level}_inputs.contrast_metadata')])
             ])
 
         stage = model

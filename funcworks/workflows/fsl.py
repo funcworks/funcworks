@@ -191,7 +191,7 @@ def fsl_run_level_wf(model,
 
     wrangle_outputs = pe.Node(
         IdentityInterface(
-            fields=['contrast_metadata', 'contrast_maps', 'brain_mask']),
+            fields=['contrast_metadata', 'contrast_maps']),
         name=f'wrangle_{level}_outputs')
 
     # Setup connections among nodes
@@ -299,7 +299,6 @@ def fsl_run_level_wf(model,
 
         (collate_outputs, wrangle_outputs, [('metadata', 'contrast_metadata'),
                                             ('out', 'contrast_maps')]),
-        (get_info, wrangle_outputs, [('brain_mask', 'brain_mask')])
     ])
 
     return workflow
@@ -308,6 +307,7 @@ def fsl_run_level_wf(model,
 def fsl_higher_level_wf(output_dir,
                         work_dir,
                         step,
+                        derivatives,
                         # smoothing_fwhm=None,
                         # smoothing_type=None,
                         smoothing_level=None,
@@ -334,11 +334,11 @@ def fsl_higher_level_wf(output_dir,
 
     wrangle_inputs = pe.Node(
         IdentityInterface(
-            fields=['contrast_metadata', 'contrast_maps', 'brain_mask']),
+            fields=['contrast_metadata', 'contrast_maps']),
         name=f'wrangle_{level}_inputs')
 
     get_info = pe.Node(
-        GenerateHigherInfo(model=step),
+        GenerateHigherInfo(model=step, derivatives=derivatives),
         name=f'get_{level}_info')
     if smoothing_level == 'l2':
         pass
@@ -390,8 +390,8 @@ def fsl_higher_level_wf(output_dir,
             ('covariance_matrices', 'cov_split_file'),
             ('dof_maps', 'dof_var_cope_file'),
             ('variance_maps', 'var_cope_file'),
-            ('effect_maps', 'cope_file')]),
-        (wrangle_inputs, estimate_model, [('brain_mask', 'mask_file')]),
+            ('effect_maps', 'cope_file'),
+            ('brain_mask', 'mask_file')]),
         (estimate_model, collate, [
             ('copes', 'effect_maps'),
             ('var_copes', 'variance_maps'),
