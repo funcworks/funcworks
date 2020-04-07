@@ -76,7 +76,7 @@ RUN echo "Downloading Miniconda installer ..." \
     && conda config --system --prepend channels conda-forge \
     && conda config --system --set auto_update_conda false \
     && conda config --system --set show_channel_urls true \
-    && conda clean -tipsy && sync
+    && conda clean --all && sync
 
 #--------------------------------------------------
 # Add NeuroDebian repository
@@ -133,7 +133,7 @@ COPY ./ /scripts/
 USER root
 RUN chmod 755 -R /scripts/
 RUN conda create -y -q --name neuro python=3.7 \
-    && sync && conda clean -tipsy && sync \
+    && sync && conda clean --all && sync \
     && /bin/bash -c "source activate neuro \
       && pip install /scripts/"\
     && sync \
