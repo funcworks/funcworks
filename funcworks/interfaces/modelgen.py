@@ -57,24 +57,24 @@ class GetRunModelInfo(IOBase):
         import pandas as pd
 
         outputs = {}
-        (regressors_file, meta_file, events_file,
+        (regressor_file, meta_file, events_file,
          outputs['reference_image'], outputs['brain_mask'],
          outputs['run_entities']) = self._get_required_files()
 
         outputs['motion_parameters'] = self._get_motion_parameters(
-            regressors_file=regressors_file)
+            regressor_file=regressor_file)
 
         with open(meta_file, 'r') as meta_read:
             run_metadata = json.load(meta_read)
         outputs['repetition_time'] = run_metadata['RepetitionTime']
         (outputs['run_info'], event_regressors,
          confound_regressors) = self._get_model_info(
-             events_file=events_file, regressors_file=regressors_file)
+             events_file=events_file, regressor_file=regressor_file)
         (outputs['run_contrasts'],
          outputs['contrast_names']) = self._get_contrasts(
              event_names=event_regressors)
         all_regressors = event_regressors + confound_regressors
-        n_vols = len(pd.read_csv(regressors_file))
+        n_vols = len(pd.read_csv(regressor_file))
         outputs['run_entities'].update({
             'Volumes': n_vols,
             'DegreesOfFreedom': (n_vols - len(all_regressors))})
@@ -84,7 +84,7 @@ class GetRunModelInfo(IOBase):
 
         if self.inputs.detrend_poly:
             polynomial_names, polynomial_arrays = self._detrend_polynomial(
-                regressors_file, self.inputs.detrend_poly)
+                regressor_file, self.inputs.detrend_poly)
             outputs['run_info'].regressor_names.extend(polynomial_names)
             outputs['run_info'].regressors.extend(polynomial_arrays)
 
@@ -110,8 +110,8 @@ class GetRunModelInfo(IOBase):
                     'run-{run}_[space-{space}_]boldref.nii.gz')
         mask_patt = ('sub-{subject}_[ses-{session}_]task-{task}_'
                      'run-{run}_[space-{space}_]desc-brain_mask.nii.gz')
-        regressors_file = (func.parent
-                           / build_path(entities, path_patterns=confounds_patt))
+        regressor_file = (func.parent
+                          / build_path(entities, path_patterns=confounds_patt))
         meta_file = (func.parent
                      / build_path(entities, path_patterns=meta_patt))
         events_file = (Path(self.inputs.bids_dir)
@@ -123,15 +123,15 @@ class GetRunModelInfo(IOBase):
                            / build_path(ents, path_patterns=ref_patt))
         mask_image = (func.parent
                       / build_path(ents, path_patterns=mask_patt))
-        return (regressors_file, meta_file, events_file,
+        return (regressor_file, meta_file, events_file,
                 reference_image, mask_image, entities)
 
-    def _get_model_info(self, events_file, regressors_file):
+    def _get_model_info(self, events_file, regressor_file):
         import pandas as pd
         import numpy as np
 
         event_data = pd.read_csv(events_file, sep='\t')
-        conf_data = pd.read_csv(regressors_file, sep='\t')
+        conf_data = pd.read_csv(regressor_file, sep='\t')
         conf_data.fillna(0, inplace=True)
         level_model = self.inputs.model
         run_info = {'conditions': [],
@@ -199,15 +199,15 @@ class GetRunModelInfo(IOBase):
         return contrast_spec, contrast_names
 
     @staticmethod
-    def _get_motion_parameters(regressors_file):
+    def _get_motion_parameters(regressor_file):
         import os  # pylint: disable=W0621,W0404
         import pandas as pd
         motion_params_path = os.path.join(
             os.getcwd(),
-            os.path.basename(regressors_file).replace('regressors',
+            os.path.basename(regressor_file).replace('regressors',
                                                       'motparams'))
 
-        confound_data = pd.read_csv(regressors_file, sep='\t')
+        confound_data = pd.read_csv(regressor_file, sep='\t')
         # Motion data gets formatted FSL style, with x, y, z rotation,
         # then x,y,z translation
         motion_data = confound_data[['rot_x', 'rot_y', 'rot_z',
@@ -227,12 +227,12 @@ class GetRunModelInfo(IOBase):
         return contrast_entities
 
     @staticmethod
-    def _detrend_polynomial(regressors_file, detrend_poly=None):
+    def _detrend_polynomial(regressor_file, detrend_poly=None):
         import numpy as np
         import pandas as pd
         from scipy.special import legendre
 
-        regressors_frame = pd.read_csv(regressors_file)
+        regressors_frame = pd.read_csv(regressor_file)
 
         poly_names = []
         poly_arrays = []
@@ -255,6 +255,8 @@ class GenerateHigherInfoInputSpec(BaseInterfaceInputSpec):
         default=None,
         desc=('Target volume for functional realignment',
               'if not value is specified, will not functional file'))
+
+
 class GenerateHigherInfoOutputSpec(TraitedSpec):
     effect_maps = traits.List()
     variance_maps = traits.List()
