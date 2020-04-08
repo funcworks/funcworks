@@ -310,6 +310,7 @@ def fsl_higher_level_wf(output_dir,
                         derivatives,
                         # smoothing_fwhm=None,
                         # smoothing_type=None,
+                        align_volumes=None,
                         smoothing_level=None,
                         name='fsl_higher_level_wf'):
     """
@@ -338,7 +339,8 @@ def fsl_higher_level_wf(output_dir,
         name=f'wrangle_{level}_inputs')
 
     get_info = pe.Node(
-        GenerateHigherInfo(model=step, derivatives=derivatives),
+        GenerateHigherInfo(
+            model=step, derivatives=derivatives, align_volumes=align_volumes),
         name=f'get_{level}_info')
     if smoothing_level == 'l2':
         pass
