@@ -246,7 +246,8 @@ class GetRunModelInfo(IOBase):
 class GenerateHigherInfoInputSpec(BaseInterfaceInputSpec):
     contrast_maps = InputMultiPath(
         File(exists=True), desc='List of statmaps from previous level')
-    contrast_metadata = traits.List(desc='Contrast names inherited from previous levels')
+    contrast_metadata = traits.List(
+        desc='Contrast entities inherited from previous levels')
     model = traits.Dict(desc='Step level information from the model file')
     layout = traits.Any()
     align_volumes = traits.Any(
@@ -326,8 +327,6 @@ class GenerateHigherInfo(IOBase):
         return organization
 
     def _merge_maps(self, organization):
-        mask_patt = ('sub-{subject}_[ses-{session}_]task-{task}_'
-                     'run-{run}_[space-{space}_]desc-brain_mask.nii.gz')
         merged_patt = ('sub-{subject}_[ses-{session}_]'
                        'contrast-{contrast}_stat-{stat}_'
                        'desc-merged_statmap.nii.gz')
@@ -363,7 +362,7 @@ class GenerateHigherInfo(IOBase):
                 metadata['run'] = 1
                 if self.inputs.align_volumes:
                     metadata['run'] = self.inputs.align_volumes
-                metadata.update({'desc':'brain', 'suffix':'mask'})
+                metadata.update({'desc': 'brain', 'suffix': 'mask'})
                 mask_path = layout.get(**metadata)
                 if len(mask_path) > 1:
                     raise ValueError('Entities given produced '
@@ -376,12 +375,13 @@ class GenerateHigherInfo(IOBase):
             if 'variance' in org:
                 metadata['stat'] = 'variance'
             metadata.update({
-                'desc':'merged',
-                'suffix':'statmap',
+                'desc': 'merged',
+                'suffix': 'statmap',
                 'contrast': snake_to_camel(metadata['contrast'])})
             merged_path = (Path.cwd()
                            / build_path(metadata, path_patterns=merged_patt))
-            maps_info['{}_maps'.format(metadata['stat'])].append(str(merged_path.as_posix()))
+            maps_info['{}_maps'.format(metadata['stat'])].append(
+                str(merged_path.as_posix()))
             nb.nifti1.save(merged_image, merged_path)
 
         return (maps_info['map_entities'], maps_info['effect_maps'],
