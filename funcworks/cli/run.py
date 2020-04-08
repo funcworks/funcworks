@@ -339,6 +339,7 @@ def build_workflow(opts, retval):
         analysis_level=opts.analysis_level,
         smoothing=opts.smoothing,
         derivatives=opts.derivatives,
+        layout=layout,
         run_uuid=run_uuid,
         use_rapidart=opts.use_rapidart,
         detrend_poly=opts.detrend_poly,

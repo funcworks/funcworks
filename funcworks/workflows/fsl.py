@@ -21,6 +21,7 @@ def fsl_run_level_wf(model,
                      work_dir,
                      subject_id,
                      derivatives,
+                     layout,
                      database_path,
                      smoothing_fwhm=None,
                      smoothing_level=None,
@@ -37,7 +38,7 @@ def fsl_run_level_wf(model,
     bids_dir = Path(bids_dir)
     work_dir = Path(work_dir)
     workflow = pe.Workflow(name=name)
-
+    layout = layout
     level = step['Level']
     if smoothing_type == 'iso':
         dimensionality = 3
@@ -103,7 +104,7 @@ def fsl_run_level_wf(model,
                     output_type='NIFTI_GZ', results_dir='results',
                     autocorr_noestimate=True),
         iterfield=['design_file', 'in_file', 'tcon_file'],
-        name=f'estimate_{level}_model')
+        name=f'model_{level}_estimate')
 
     image_pattern = ('[sub-{subject}/][ses-{session}/]'
                      '[sub-{subject}_][ses-{session}_]'
@@ -307,7 +308,7 @@ def fsl_run_level_wf(model,
 def fsl_higher_level_wf(output_dir,
                         work_dir,
                         step,
-                        derivatives,
+                        layout,
                         # smoothing_fwhm=None,
                         # smoothing_type=None,
                         align_volumes=None,
@@ -340,7 +341,7 @@ def fsl_higher_level_wf(output_dir,
 
     get_info = pe.Node(
         GenerateHigherInfo(
-            model=step, derivatives=derivatives, align_volumes=align_volumes),
+            model=step, layout=layout, align_volumes=align_volumes),
         name=f'get_{level}_info')
     if smoothing_level == 'l2':
         pass
@@ -349,7 +350,7 @@ def fsl_higher_level_wf(output_dir,
         fsl.FLAMEO(run_mode='fe'),
         iterfield=['design_file', 't_con_file', 'cov_split_file',
                    'dof_var_cope_file', 'var_cope_file', 'cope_file'],
-        name=f'estimate_{level}_model')
+        name=f'model_{level}_estimate')
 
     collate = pe.Node(
         MergeAll(['effect_maps', 'variance_maps', 'tstat_maps',
