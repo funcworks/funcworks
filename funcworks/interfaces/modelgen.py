@@ -108,7 +108,6 @@ class GetRunModelInfo(IOBase):
         events_file = layout.get(
             **{**entities, 'desc': None, 'space': None,
                'suffix': 'events', 'extension': 'tsv'})[0].path
-        ents = entities.copy()
         align_vols = {}
         if self.inputs.align_volumes:
             align_vols = {'run': self.inputs.align_volumes}

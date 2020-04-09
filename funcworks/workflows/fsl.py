@@ -7,7 +7,7 @@ from nipype.pipeline import engine as pe
 from nipype.interfaces import fsl
 from nipype.interfaces.utility import Function, IdentityInterface, Merge
 from nipype.algorithms import modelgen, rapidart as ra
-#from bids import BIDSLayout
+# from bids import BIDSLayout
 from ..interfaces.bids import BIDSDataGrabber, BIDSDataSink
 from ..interfaces.modelgen import GetRunModelInfo, GenerateHigherInfo
 from ..interfaces.io import MergeAll, CollateWithMetadata
@@ -37,7 +37,7 @@ def fsl_run_level_wf(model,
     bids_dir = Path(bids_dir)
     work_dir = Path(work_dir)
     workflow = pe.Workflow(name=name)
-    #layout = BIDSLayout.load(database_path)
+    # layout = BIDSLayout.load(database_path)
     level = step['Level']
     if smoothing_type == 'iso':
         dimensionality = 3
@@ -212,7 +212,8 @@ def fsl_run_level_wf(model,
             (get_info, reshape_rapidart, [
                 ('run_info', 'run_info'),
                 ('contrast_entities', 'contrast_entities')]),
-            (realign_runs, reshape_rapidart, [('out_file', 'functional_file')]),
+            (realign_runs, reshape_rapidart, [
+                ('out_file', 'functional_file')]),
             (reshape_rapidart, specify_model, [('run_info', 'subject_info')]),
             (reshape_rapidart, plot_matrices, [('run_info', 'run_info')]),
             (reshape_rapidart, collate, [
@@ -325,7 +326,7 @@ def fsl_higher_level_wf(output_dir,
     workflow.base_dir = work_dir
     workflow.desc = ""
 
-    #layout = BIDSLayout.load(database_path)
+    # layout = BIDSLayout.load(database_path)
     level = step['Level']
 
     image_pattern = ('[sub-{subject}/][ses-{session}/]'

@@ -54,6 +54,7 @@ def bids_split_filename(fname):
         ext = file_path.suffix
     return pth, fname, ext
 
+
 def _ensure_model(model):
     model = getattr(model, 'filename', model)
 
@@ -64,6 +65,7 @@ def _ensure_model(model):
         else:
             model = json.loads(model)
     return model
+
 
 class BIDSDataSinkInputSpec(BaseInterfaceInputSpec):
     base_directory = Directory(
@@ -146,6 +148,7 @@ def _copy_or_convert(in_file, out_file):
         return
 
     raise RuntimeError("Cannot convert {} to {}".format(in_ext, out_ext))
+
 
 class BIDSDataGrabberInputSpec(DynamicTraitedSpec):
     database_path = Directory(
