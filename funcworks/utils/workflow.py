@@ -1,34 +1,38 @@
-"""
-Helper functions for FSL workflows
-"""
-# pylint: disable=R0913,R0914,C0415,C0116
-# Run Level Functions
+"""Helper functions for FSL workflows."""
 
 
 def get_btthresh(medianvals):
+    """Produce brightness threshold for FSL SUSAN smoothing algorithm."""
     return [0.75 * val for val in medianvals]
 
 
-def get_entities(run_entities, contrasts):
-    contrast_entities = []
-    contrast_names = [contrast[0] for contrast in contrasts]
-    for contrast_name in contrast_names:
-        run_entities.update({'contrast': contrast_name})
-        contrast_entities.append(run_entities.copy())
-    return contrast_entities
-
-
 def get_usans(central_val):
+    """Produce usans values given a list of mean images and median values."""
     return [[tuple([val[0], 0.75 * val[1]])] for val in central_val]
 
 
 def snake_to_camel(string):
+    """Change a given string from snake_case to camelCase."""
     string.replace('.', '_')
     words = string.replace('.', '').split('_')
     return words[0] + ''.join(word.title() for word in words[1:])
 
 
 def reshape_ra(run_info, functional_file, outlier_file, contrast_entities):
+    """
+    Reshape Rapidart Output into a form that is usable.
+
+    Inputs:
+    run_info: Bunch containing run info for a run level model.
+    functional_file: BOLD file previously processed by RapidArt.
+    outlier_file: Outlier list produced by RapidArt.
+    contrast_entities: List of entities that need updated DegreesOfFreedom
+
+    Outputs:
+    run_info: Updated Bunch containing regressors for RapidArt flagged
+              timepoints
+    contrast_entities: Updated contrast entities with new DegreesOfFreedom
+    """
     import pandas as pd
     import numpy as np
     import nibabel as nb
@@ -55,6 +59,7 @@ def reshape_ra(run_info, functional_file, outlier_file, contrast_entities):
 
 
 def correct_matrix(design_matrix):
+    """Corrects FSL Design Matrix with previously zeroed out columns."""
     import numpy as np
     import pandas as pd
     from pathlib import Path

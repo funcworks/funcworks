@@ -1,6 +1,4 @@
-"""
-Run and Session Level WFs in FSL
-"""
+"""Run and higher level workflows in FSL."""
 # pylint: disable=R0913, R0914
 from pathlib import Path
 from nipype.pipeline import engine as pe
@@ -29,11 +27,7 @@ def fsl_run_level_wf(model,
                      detrend_poly=None,
                      align_volumes=None,
                      name='fsl_run_level_wf'):
-    """
-    This workflow generates processes function data with information given in
-    the model file
-
-    """
+    """Generate run level workflow for a given model."""
     bids_dir = Path(bids_dir)
     work_dir = Path(work_dir)
     workflow = pe.Workflow(name=name)
@@ -315,13 +309,13 @@ def fsl_higher_level_wf(output_dir,
                         smoothing_level=None,
                         name='fsl_higher_level_wf'):
     """
+    Produce a second level (across runs) workflow for a given subject.
+
     This workflow generates processes functional_data across a
     single session (read: between runs) and computes
     effects, variances, residuals and statmaps
     using FSLs FLAME0 given information in the bids model file
-
     """
-
     workflow = pe.Workflow(name=name)
     workflow.base_dir = work_dir
     workflow.desc = ""

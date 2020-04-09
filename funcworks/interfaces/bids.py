@@ -1,6 +1,4 @@
-"""
-General BIDS interfaces
-"""
+"""General BIDS interfaces."""
 # pylint: disable=W0703,C0115,C0415
 import json
 import shutil
@@ -20,7 +18,9 @@ iflogger = logging.getLogger("nipype.interface")
 
 
 def bids_split_filename(fname):
-    """Split a filename into parts: path, base filename, and extension
+    """
+    Split a filename into parts: path, base filename, and extension.
+
     Respects multi-part file types used in BIDS standard and draft extensions
     Largely copied from nipype.utils.filemanip.split_filename
     Parameters
@@ -68,7 +68,7 @@ def _ensure_model(model):
     return model
 
 
-class BIDSDataSinkInputSpec(BaseInterfaceInputSpec):
+class _BIDSDataSinkInputSpec(BaseInterfaceInputSpec):
     base_directory = Directory(
         mandatory=True,
         desc='Path to BIDS (or derivatives) root directory')
@@ -81,18 +81,21 @@ class BIDSDataSinkInputSpec(BaseInterfaceInputSpec):
         traits.Str, desc='BIDS path patterns describing format of file names')
 
 
-class BIDSDataSinkOutputSpec(TraitedSpec):
+class _BIDSDataSinkOutputSpec(TraitedSpec):
     out_file = OutputMultiPath(File, desc='output file')
 
 
 class BIDSDataSink(IOBase):
-    '''
+    """
+    Moves multiple files to a clean BIDS Naming Structure.
+
     DataSink for producing moving several files to a nice BIDS Naming structure
     given files and a list of entities. All credit goes to Chris Markiewicz,
     Alejandro De La Vega, Dylan Nielson and Adina Wagner and the Fitlins team.
-    '''
-    input_spec = BIDSDataSinkInputSpec
-    output_spec = BIDSDataSinkOutputSpec
+    """
+
+    input_spec = _BIDSDataSinkInputSpec
+    output_spec = _BIDSDataSinkOutputSpec
 
     _always_run = True
 
@@ -151,7 +154,7 @@ def _copy_or_convert(in_file, out_file):
     raise RuntimeError("Cannot convert {} to {}".format(in_ext, out_ext))
 
 
-class BIDSDataGrabberInputSpec(DynamicTraitedSpec):
+class _BIDSDataGrabberInputSpec(DynamicTraitedSpec):
     database_path = Directory(
         exists=True, mandatory=True, desc="Path to BIDS Dataset DBCACHE")
     output_query = traits.Dict(
@@ -164,8 +167,9 @@ class BIDSDataGrabberInputSpec(DynamicTraitedSpec):
 
 
 class BIDSDataGrabber(LibraryBaseInterface, IOBase):
-    """BIDS datagrabber module that wraps around pybids to allow arbitrary
-    querying of BIDS datasets.
+    """
+    Module that allows arbitrary query of BIDS Datasets.
+
     Examples
     --------
     By default, the BIDSDataGrabber fetches anatomical and functional images
@@ -186,18 +190,13 @@ class BIDSDataGrabber(LibraryBaseInterface, IOBase):
     >>> results = bg.run() # doctest: +SKIP
     """
 
-    input_spec = BIDSDataGrabberInputSpec
+    input_spec = _BIDSDataGrabberInputSpec
     output_spec = DynamicTraitedSpec
     _always_run = False
     _pkg = "bids"
 
     def __init__(self, infields=None, **kwargs):
-        """
-        Parameters
-        ----------
-        infields : list of str
-            Indicates the input fields to be dynamically created
-        """
+        """See help(BIDSDataGrabber) for more info."""
         super(BIDSDataGrabber, self).__init__(**kwargs)
 
         if not isdefined(self.inputs.output_query):
@@ -268,6 +267,7 @@ class BIDSDataGrabber(LibraryBaseInterface, IOBase):
 def add_traits(base, names, trait_type=None):
     """
     Add traits to a traited class.
+
     All traits are set to Undefined by default
     """
     if trait_type is None:

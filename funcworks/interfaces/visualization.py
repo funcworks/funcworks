@@ -1,6 +1,4 @@
-"""
-Run and Session Level Visualization interface
-"""
+"""Run and Session Level Visualization interface."""
 # pylint: disable=E1101, C0115
 from pathlib import Path
 from nipype.interfaces.base import (BaseInterfaceInputSpec,
@@ -15,7 +13,7 @@ from bids.layout.writing import build_path
 sns.set_style('white')
 
 
-class PlotMatricesInputSpec(BaseInterfaceInputSpec):
+class _PlotMatricesInputSpec(BaseInterfaceInputSpec):
     run_info = traits.Any(desc='List of regressors of no interest')
     mat_file = File(exists=True,
                     desc='Matrix File produced by Generate Model')
@@ -25,7 +23,7 @@ class PlotMatricesInputSpec(BaseInterfaceInputSpec):
     output_dir = Directory(desc='Directory for Output')
 
 
-class PlotMatricesOutputSpec(TraitedSpec):
+class _PlotMatricesOutputSpec(TraitedSpec):
     design_matrix = traits.Any(desc='Path to design matrix')
     design_plot = File(
         desc='SVG File containing the plotted Design Matrix')
@@ -36,8 +34,10 @@ class PlotMatricesOutputSpec(TraitedSpec):
 
 
 class PlotMatrices(IOBase):
-    input_spec = PlotMatricesInputSpec
-    output_spec = PlotMatricesOutputSpec
+    """Plot matrices for a given design."""
+
+    input_spec = _PlotMatricesInputSpec
+    output_spec = _PlotMatricesOutputSpec
     _always_run = True
 
     def _list_outputs(self):

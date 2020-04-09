@@ -1,4 +1,4 @@
-# pylint: disable=R0913,R0914,C0114,C0116,W0212
+"""Workflow connecting step level workflows for each subject."""
 import json
 from pathlib import Path
 from copy import deepcopy
@@ -18,7 +18,7 @@ def init_funcworks_wf(model_file,
                       use_rapidart,
                       detrend_poly,
                       align_volumes):
-
+    """Initialize funcworks single subject workflow for all subjects."""
     with open(model_file, 'r') as read_mdl:
         model = json.load(read_mdl)
 
@@ -88,7 +88,7 @@ def init_funcworks_subject_wf(model,
                               detrend_poly,
                               align_volumes,
                               name):
-
+    """Produce single subject workflow for a subject given a model spec."""
     workflow = Workflow(name=name)
     stage = None
     pre_level = None
@@ -134,9 +134,3 @@ def init_funcworks_subject_wf(model,
         if level == analysis_level:
             break
     return workflow
-
-
-def _pop(inlist):
-    if isinstance(inlist, (list, tuple)):
-        return inlist[0]
-    return inlist

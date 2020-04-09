@@ -1,6 +1,4 @@
-"""
-Main run script
-"""
+"""Main run script."""
 # pylint: disable=C0103,R0913,R0914,W0404,C0116,W0212,W0613,W0611,W1202,C0415
 import gc
 import sys
@@ -19,6 +17,7 @@ logger = logging.getLogger('cli')
 
 
 def check_deps(workflow):
+    """Make sure workflow dependencies are present before runtime."""
     from nipype.utils.filemanip import which
     return sorted(
         (node.interface.__class__.__name__, node.interface._cmd)
@@ -32,7 +31,7 @@ def _warn_redirect(message, category, filename, lineno, file=None, line=None):
 
 
 def get_parser():
-    """Build Parser Object"""
+    """Build Parser Object."""
     parser = ArgumentParser(
         description='FUNCWORKs: fMRI FUNCtional WORKflows',
         formatter_class=ArgumentDefaultsHelpFormatter)
@@ -98,7 +97,7 @@ def get_parser():
 
 
 def main():
-    """Entry Point"""
+    """Entry Point."""
     from multiprocessing import set_start_method, Process, Manager
     set_start_method('spawn')
     warnings.showwarning = _warn_redirect
@@ -171,8 +170,8 @@ def main():
 
 def build_workflow(opts, retval):
     """
-    Create the Nipype Workflow that supports the whole execution
-    graph, given the inputs.
+    Create the Nipype Workflow for a graph given the inputs.
+
     All the checks and the construction of the workflow are done
     inside this function that has pickleable inputs and output
     dictionary (``retval``) to allow isolation using a

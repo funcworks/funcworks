@@ -1,4 +1,4 @@
-# pylint: disable=C0415,C0114,C0115,W0404,W0621,W0612
+"""Interfaces for constructing models in FSL."""
 from pathlib import Path
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec, Bunch, TraitedSpec,
@@ -10,7 +10,7 @@ import numpy as np
 from ..utils import snake_to_camel
 
 
-class GetRunModelInfoInputSpec(BaseInterfaceInputSpec):
+class _GetRunModelInfoInputSpec(BaseInterfaceInputSpec):
     bids_dir = Directory(exists=True, mandatory=True)
     functional_file = File(exists=True, mandatory=True)
     database_path = Directory(exists=True, mandatory=True)
@@ -25,7 +25,7 @@ class GetRunModelInfoInputSpec(BaseInterfaceInputSpec):
               'if not value is specified, will not functional file'))
 
 
-class GetRunModelInfoOutputSpec(TraitedSpec):
+class _GetRunModelInfoOutputSpec(TraitedSpec):
     run_info = traits.Any(
         desc='Model Info required to construct Run Level Model')
     run_contrasts = traits.List(
@@ -47,9 +47,10 @@ class GetRunModelInfoOutputSpec(TraitedSpec):
 
 
 class GetRunModelInfo(IOBase):
-    '''Grabs EV files for subject based on contrasts of interest'''
-    input_spec = GetRunModelInfoInputSpec
-    output_spec = GetRunModelInfoOutputSpec
+    """Grab files and information needed for an FSL run level model."""
+
+    input_spec = _GetRunModelInfoInputSpec
+    output_spec = _GetRunModelInfoOutputSpec
     # _always_run = True
 
     def _list_outputs(self):
@@ -156,10 +157,7 @@ class GetRunModelInfo(IOBase):
                 run_info.regressor_names)  # pylint: disable=E1101
 
     def _get_contrasts(self, event_names):
-        """
-        Produces contrasts from a given model file
-        and a run specific events file
-        """
+        """Produce contrasts from a model step."""
         model = self.inputs.model
         contrast_spec = []
         real_contrasts = model["Contrasts"]
@@ -238,7 +236,7 @@ class GetRunModelInfo(IOBase):
         return poly_names, poly_arrays
 
 
-class GenerateHigherInfoInputSpec(BaseInterfaceInputSpec):
+class _GenerateHigherInfoInputSpec(BaseInterfaceInputSpec):
     contrast_maps = InputMultiPath(
         File(exists=True), desc='List of statmaps from previous level')
     contrast_metadata = traits.List(
@@ -251,7 +249,7 @@ class GenerateHigherInfoInputSpec(BaseInterfaceInputSpec):
               'if not value is specified, will not functional file'))
 
 
-class GenerateHigherInfoOutputSpec(TraitedSpec):
+class _GenerateHigherInfoOutputSpec(TraitedSpec):
     effect_maps = traits.List()
     variance_maps = traits.List()
     dof_maps = traits.List()
@@ -263,8 +261,10 @@ class GenerateHigherInfoOutputSpec(TraitedSpec):
 
 
 class GenerateHigherInfo(IOBase):
-    input_spec = GenerateHigherInfoInputSpec
-    output_spec = GenerateHigherInfoOutputSpec
+    """Generate info for a level higher than first."""
+
+    input_spec = _GenerateHigherInfoInputSpec
+    output_spec = _GenerateHigherInfoOutputSpec
 
     _always_run = True
 

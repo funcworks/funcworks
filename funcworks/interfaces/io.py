@@ -1,14 +1,17 @@
-# pylint: disable=W0404,W0621,W0612,C0111
+"""Interfaces that manipulate lists of data."""
 from nipype.interfaces.base import (
     isdefined, DynamicTraitedSpec, traits, TraitedSpec, SimpleInterface)
 from nipype.interfaces.io import IOBase, add_traits
 
 
 class MergeAll(IOBase):
+    """Flatten all input lists while preserving order."""
+
     input_spec = DynamicTraitedSpec
     output_spec = DynamicTraitedSpec
 
     def __init__(self, fields=None, check_lengths=False):
+        """Flatten all input lists while preserving order."""
         super(MergeAll, self).__init__()
         self._check_lengths = check_lengths
         self._lengths = None
@@ -46,21 +49,24 @@ class MergeAll(IOBase):
         return outputs
 
 
-class CollateWithMetadataInputSpec(DynamicTraitedSpec):
+class _CollateWithMetadataInputSpec(DynamicTraitedSpec):
     metadata = traits.List(traits.Dict)
     field_to_metadata_map = traits.Dict(traits.Str)
 
 
-class CollateWithMetadataOutputSpec(TraitedSpec):
+class _CollateWithMetadataOutputSpec(TraitedSpec):
     metadata = traits.List(traits.Dict)
     out = traits.List(traits.Any)
 
 
 class CollateWithMetadata(SimpleInterface):
-    input_spec = CollateWithMetadataInputSpec
-    output_spec = CollateWithMetadataOutputSpec
+    """Flatten inputs into single list and associated metadata."""
+
+    input_spec = _CollateWithMetadataInputSpec
+    output_spec = _CollateWithMetadataOutputSpec
 
     def __init__(self, fields=None, **kwargs):
+        """Flatten inputs into single list and associated metadata."""
         super(CollateWithMetadata, self).__init__(**kwargs)
         if not fields:
             fields = self.inputs.field_to_metadata_map.keys()
