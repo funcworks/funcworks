@@ -63,21 +63,6 @@ RUN source $NVM_DIR/nvm.sh \
 ENV NODE_PATH $NVM_DIR/v$NODE_VERSION/lib/node_modules
 ENV PATH $NVM_DIR/versions/node/v$NODE_VERSION/bin:$PATH
 
-#------------------
-# Install Miniconda
-#------------------
-ENV CONDA_DIR=/opt/conda \
-    PATH=/opt/conda/bin:$PATH
-RUN echo "Downloading Miniconda installer ..." \
-    && miniconda_installer=/tmp/miniconda.sh \
-    && curl -sSL --retry 5 -o $miniconda_installer https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh \
-    && /bin/bash $miniconda_installer -b -p $CONDA_DIR \
-    && rm -f $miniconda_installer \
-    && conda config --system --prepend channels conda-forge \
-    && conda config --system --set auto_update_conda false \
-    && conda config --system --set show_channel_urls true \
-    && conda clean --all && sync
-
 #--------------------------------------------------
 # Add NeuroDebian repository
 # Please note that some packages downloaded through
@@ -118,13 +103,20 @@ ENV FSLDIR="/usr/share/fsl/5.0" \
     AFNI_PLUGINPATH="/usr/lib/afni/plugins"
 ENV PATH="/usr/lib/fsl/5.0:/usr/lib/afni/bin:$PATH"
 
-# Installing ANTs 2.2.0 (NeuroDocker build)
-ENV ANTSPATH=/usr/lib/ants
-RUN mkdir -p $ANTSPATH && \
-    curl -sSL "https://dl.dropbox.com/s/2f4sui1z6lcgyek/ANTs-Linux-centos5_x86_64-v2.2.0-0740f91.tar.gz" \
-    | tar -xzC $ANTSPATH --strip-components 1
-ENV PATH=$ANTSPATH:$PATH
-
+#------------------
+# Install Miniconda
+#------------------
+ENV CONDA_DIR=/opt/conda \
+    PATH=/opt/conda/bin:$PATH
+RUN echo "Downloading Miniconda installer ..." \
+    && miniconda_installer=/tmp/miniconda.sh \
+    && curl -sSL --retry 5 -o $miniconda_installer https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh \
+    && /bin/bash $miniconda_installer -b -p $CONDA_DIR \
+    && rm -f $miniconda_installer \
+    && conda config --system --prepend channels conda-forge \
+    && conda config --system --set auto_update_conda false \
+    && conda config --system --set show_channel_urls true \
+    && conda clean --all && sync
 
 #-------------------------
 # Create conda environment
@@ -138,16 +130,6 @@ RUN conda create -y -q --name neuro python=3.7 \
       && pip install /scripts/"\
     && sync \
     && sed -i '$isource activate neuro' $ND_ENTRYPOINT
-
-RUN apt-get update -qq && apt-get install -yq --no-install-recommends dirmngr gnupg \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
-    && curl -sSL http://neuro.debian.net/lists/stretch.us-nh.full \
-    > /etc/apt/sources.list.d/neurodebian.sources.list \
-    && curl -sSL https://dl.dropbox.com/s/zxs209o955q6vkg/neurodebian.gpg \
-    | apt-key add - \
-    && (apt-key adv --refresh-keys --keyserver hkp://pool.sks-keyservers.net:80 0xA5D32F012649A5A9 || true) \
-    && apt-get update
 
 # Create new user: neuro
 RUN useradd --no-user-group --create-home --shell /bin/bash neuro

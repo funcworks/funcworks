@@ -7,6 +7,7 @@ from nipype.pipeline import engine as pe
 from nipype.interfaces import fsl
 from nipype.interfaces.utility import Function, IdentityInterface, Merge
 from nipype.algorithms import modelgen, rapidart as ra
+#from bids import BIDSLayout
 from ..interfaces.bids import BIDSDataGrabber, BIDSDataSink
 from ..interfaces.modelgen import GetRunModelInfo, GenerateHigherInfo
 from ..interfaces.io import MergeAll, CollateWithMetadata
@@ -20,8 +21,6 @@ def fsl_run_level_wf(model,
                      output_dir,
                      work_dir,
                      subject_id,
-                     derivatives,
-                     layout,
                      database_path,
                      smoothing_fwhm=None,
                      smoothing_level=None,
@@ -38,30 +37,29 @@ def fsl_run_level_wf(model,
     bids_dir = Path(bids_dir)
     work_dir = Path(work_dir)
     workflow = pe.Workflow(name=name)
-    layout = layout
+    #layout = BIDSLayout.load(database_path)
     level = step['Level']
     if smoothing_type == 'iso':
         dimensionality = 3
     elif smoothing_type == 'inp':
         dimensionality = 2
 
-    fixed_entities = model['Input']['Include']
     workflow.__desc__ = ""
     (work_dir / model['Name']).mkdir(exist_ok=True)
 
-    bdg = pe.Node(
+    getter = pe.Node(
         BIDSDataGrabber(
-            base_dir=bids_dir, subject=subject_id,
-            index_derivatives=derivatives,
+            subject=subject_id,
             database_path=database_path,
-            output_query={'func': {**{'datatype': 'func', 'desc': 'preproc',
-                                      'extension': 'nii.gz', 'suffix': 'bold'},
-                                   **fixed_entities}}),
+            output_query={
+                'bold_files': {**{'datatype': 'func', 'desc': 'preproc',
+                                  'extension': 'nii.gz', 'suffix': 'bold'},
+                               **model['Input']['Include']}}),
         name='func_select')
 
     get_info = pe.MapNode(
         GetRunModelInfo(
-            model=step, bids_dir=bids_dir,
+            model=step, bids_dir=bids_dir, database_path=database_path,
             detrend_poly=detrend_poly, align_volumes=align_volumes),
         iterfield=['functional_file'],
         name=f'get_{level}_info')
@@ -122,11 +120,12 @@ def fsl_run_level_wf(model,
         name='rapidart_run')
 
     reshape_rapidart = pe.MapNode(
-        Function(input_names=['run_info', 'func', 'outlier_files',
-                              'contrast_entities'],
+        Function(input_names=['run_info', 'functional_file',
+                              'outlier_file', 'contrast_entities'],
                  output_names=['run_info', 'contrast_entities'],
                  function=utils.reshape_ra),
-        iterfield=['outlier_files', 'run_info', 'func', 'contrast_entities'],
+        iterfield=['run_info', 'functional_file',
+                   'outlier_file', 'contrast_entities'],
         name='reshape_rapidart')
 
     mean_img = pe.MapNode(
@@ -197,8 +196,8 @@ def fsl_run_level_wf(model,
 
     # Setup connections among nodes
     workflow.connect([
-        (bdg, realign_runs, [('func', 'in_file')]),
-        (bdg, get_info, [('func', 'functional_file')]),
+        (getter, realign_runs, [('bold_files', 'in_file')]),
+        (getter, get_info, [('bold_files', 'functional_file')]),
         (get_info, realign_runs, [('reference_image', 'ref_file')]),
     ])
 
@@ -209,11 +208,11 @@ def fsl_run_level_wf(model,
             (get_info, run_rapidart, [('brain_mask', 'mask_file')]),
             (realign_runs, run_rapidart, [('out_file', 'realigned_files')]),
             (run_rapidart, reshape_rapidart, [
-                ('outlier_files', 'outlier_files')]),
+                ('outlier_files', 'outlier_file')]),
             (get_info, reshape_rapidart, [
                 ('run_info', 'run_info'),
                 ('contrast_entities', 'contrast_entities')]),
-            (realign_runs, reshape_rapidart, [('out_file', 'func')]),
+            (realign_runs, reshape_rapidart, [('out_file', 'functional_file')]),
             (reshape_rapidart, specify_model, [('run_info', 'subject_info')]),
             (reshape_rapidart, plot_matrices, [('run_info', 'run_info')]),
             (reshape_rapidart, collate, [
@@ -308,7 +307,7 @@ def fsl_run_level_wf(model,
 def fsl_higher_level_wf(output_dir,
                         work_dir,
                         step,
-                        layout,
+                        database_path,
                         # smoothing_fwhm=None,
                         # smoothing_type=None,
                         align_volumes=None,
@@ -326,6 +325,7 @@ def fsl_higher_level_wf(output_dir,
     workflow.base_dir = work_dir
     workflow.desc = ""
 
+    #layout = BIDSLayout.load(database_path)
     level = step['Level']
 
     image_pattern = ('[sub-{subject}/][ses-{session}/]'
@@ -341,7 +341,9 @@ def fsl_higher_level_wf(output_dir,
 
     get_info = pe.Node(
         GenerateHigherInfo(
-            model=step, layout=layout, align_volumes=align_volumes),
+            model=step,
+            database_path=database_path,
+            align_volumes=align_volumes),
         name=f'get_{level}_info')
     if smoothing_level == 'l2':
         pass

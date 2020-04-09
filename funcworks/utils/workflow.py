@@ -28,15 +28,15 @@ def snake_to_camel(string):
     return words[0] + ''.join(word.title() for word in words[1:])
 
 
-def reshape_ra(run_info, func, outlier_files, contrast_entities):
+def reshape_ra(run_info, functional_file, outlier_file, contrast_entities):
     import pandas as pd
     import numpy as np
     import nibabel as nb
     from nipype.interfaces.base import Bunch
     run_dict = run_info.dictcopy()
-    ntimepoints = nb.load(func).get_data().shape[-1]
+    ntimepoints = nb.load(functional_file).get_data().shape[-1]
     outlier_frame = pd.read_csv(
-        outlier_files, header=None, names=['outlier_index'])
+        outlier_file, header=None, names=['outlier_index'])
     for i, row in outlier_frame.iterrows():
         run_dict['regressor_names'].append(f'rapidart{i:02d}')
         ra_col = np.zeros(ntimepoints)

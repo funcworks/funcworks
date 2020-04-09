@@ -92,7 +92,6 @@ def get_parser():
         'in the model file for the boldref and brain_mask')
     parser.add_argument(
         '--database-path', action='store',
-        default=None, type=Path,
         help='Path to existing directory containing BIDS '
              'Database files useful for speeding up run-time')
     return parser
@@ -212,10 +211,7 @@ def build_workflow(opts, retval):
             reset_database=True)
     else:
         database_path = opts.database_path
-        layout = BIDSLayout(
-            bids_dir, derivatives=opts.derivatives, validate=True,
-            database_file=database_path,
-            reset_database=False)
+        layout = BIDSLayout.load(database_path)
 
     if output_dir == bids_dir:
         build_log.error(
@@ -338,8 +334,6 @@ def build_workflow(opts, retval):
         participants=retval['participant_label'],
         analysis_level=opts.analysis_level,
         smoothing=opts.smoothing,
-        derivatives=opts.derivatives,
-        layout=layout,
         run_uuid=run_uuid,
         use_rapidart=opts.use_rapidart,
         detrend_poly=opts.detrend_poly,

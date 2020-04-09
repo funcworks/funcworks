@@ -2,23 +2,21 @@
 General BIDS interfaces
 """
 # pylint: disable=W0703,C0115,C0415
+import json
 import shutil
 from pathlib import Path
 from gzip import GzipFile
-import json
 from nipype import logging
 from nipype.utils.filemanip import copyfile
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec, TraitedSpec,
-    InputMultiPath, OutputMultiPath, File, Directory,
-    traits, isdefined, LibraryBaseInterface, Str,
-    DynamicTraitedSpec, Undefined)
+    InputMultiPath, OutputMultiPath, File, Directory, Str, Undefined,
+    traits, isdefined, LibraryBaseInterface, DynamicTraitedSpec)
 from nipype.interfaces.io import IOBase
 import nibabel as nb
 from ..utils import snake_to_camel
 
 iflogger = logging.getLogger("nipype.interface")
-
 
 def bids_split_filename(fname):
     """Split a filename into parts: path, base filename, and extension
@@ -56,6 +54,16 @@ def bids_split_filename(fname):
         ext = file_path.suffix
     return pth, fname, ext
 
+def _ensure_model(model):
+    model = getattr(model, 'filename', model)
+
+    if isinstance(model, str):
+        if Path(model).is_file():
+            with open(model) as fobj:
+                model = json.load(fobj)
+        else:
+            model = json.loads(model)
+    return model
 
 class BIDSDataSinkInputSpec(BaseInterfaceInputSpec):
     base_directory = Directory(
@@ -139,10 +147,7 @@ def _copy_or_convert(in_file, out_file):
 
     raise RuntimeError("Cannot convert {} to {}".format(in_ext, out_ext))
 
-
 class BIDSDataGrabberInputSpec(DynamicTraitedSpec):
-    base_dir = Directory(
-        exists=True, desc="Path to BIDS Directory.", mandatory=True)
     database_path = Directory(
         exists=True, mandatory=True, desc="Path to BIDS Dataset DBCACHE")
     output_query = traits.Dict(
@@ -152,11 +157,6 @@ class BIDSDataGrabberInputSpec(DynamicTraitedSpec):
         True,
         usedefault=True,
         desc="Generate exception if list is empty for a given field")
-    index_derivatives = traits.Any(
-        [traits.Bool, traits.Str, traits.List(Directory)],
-        default=False, mandatory=True, usedefault=True,
-        desc="Directory / List of Directories to Index, "
-             "Otherwise no derivative indexing will occur")
 
 
 class BIDSDataGrabber(LibraryBaseInterface, IOBase):
