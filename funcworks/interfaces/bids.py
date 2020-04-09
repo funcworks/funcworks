@@ -18,6 +18,7 @@ from ..utils import snake_to_camel
 
 iflogger = logging.getLogger("nipype.interface")
 
+
 def bids_split_filename(fname):
     """Split a filename into parts: path, base filename, and extension
     Respects multi-part file types used in BIDS standard and draft extensions
