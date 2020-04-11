@@ -1,4 +1,4 @@
-# pylint: disable=R0913,R0914,C0114,C0116,W0212
+"""Workflow connecting step level workflows for each subject."""
 import json
 from pathlib import Path
 from copy import deepcopy
@@ -14,12 +14,11 @@ def init_funcworks_wf(model_file,
                       participants,
                       analysis_level,
                       smoothing,
-                      derivatives,
                       run_uuid,
                       use_rapidart,
                       detrend_poly,
                       align_volumes):
-
+    """Initialize funcworks single subject workflow for all subjects."""
     with open(model_file, 'r') as read_mdl:
         model = json.load(read_mdl)
 
@@ -56,7 +55,6 @@ def init_funcworks_wf(model_file,
             smoothing_fwhm=smoothing_fwhm,
             smoothing_level=smoothing_level,
             smoothing_type=smoothing_type,
-            derivatives=derivatives,
             use_rapidart=use_rapidart,
             detrend_poly=detrend_poly,
             align_volumes=align_volumes,
@@ -86,12 +84,11 @@ def init_funcworks_subject_wf(model,
                               smoothing_fwhm,
                               smoothing_level,
                               smoothing_type,
-                              derivatives,
                               use_rapidart,
                               detrend_poly,
                               align_volumes,
                               name):
-
+    """Produce single subject workflow for a subject given a model spec."""
     workflow = Workflow(name=name)
     stage = None
     pre_level = None
@@ -109,7 +106,6 @@ def init_funcworks_subject_wf(model,
                 smoothing_fwhm=smoothing_fwhm,
                 smoothing_level=smoothing_level,
                 smoothing_type=smoothing_type,
-                derivatives=derivatives,
                 use_rapidart=use_rapidart,
                 detrend_poly=detrend_poly,
                 align_volumes=align_volumes,
@@ -120,18 +116,18 @@ def init_funcworks_subject_wf(model,
                 step=step,
                 output_dir=output_dir,
                 work_dir=work_dir,
+                database_path=database_path,
                 # smoothing_fwhm=smoothing_fwhm,
                 smoothing_level=smoothing_level,
                 # smoothing_type=smoothing_type,
+                align_volumes=align_volumes,
                 name=f'fsl_{level}_level_wf')
             workflow.connect([
                 (stage, model, [
                     (f'wrangle_{pre_level}_outputs.contrast_maps',
                      f'wrangle_{level}_inputs.contrast_maps'),
                     (f'wrangle_{pre_level}_outputs.contrast_metadata',
-                     f'wrangle_{level}_inputs.contrast_metadata'),
-                    (f'wrangle_{pre_level}_outputs.brain_mask',
-                     f'wrangle_{level}_inputs.brain_mask')])
+                     f'wrangle_{level}_inputs.contrast_metadata')])
             ])
 
         stage = model
@@ -139,9 +135,3 @@ def init_funcworks_subject_wf(model,
         if level == analysis_level:
             break
     return workflow
-
-
-def _pop(inlist):
-    if isinstance(inlist, (list, tuple)):
-        return inlist[0]
-    return inlist

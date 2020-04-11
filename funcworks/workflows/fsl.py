@@ -1,12 +1,11 @@
-"""
-Run and Session Level WFs in FSL
-"""
+"""Run and higher level workflows in FSL."""
 # pylint: disable=R0913, R0914
 from pathlib import Path
 from nipype.pipeline import engine as pe
 from nipype.interfaces import fsl
 from nipype.interfaces.utility import Function, IdentityInterface, Merge
 from nipype.algorithms import modelgen, rapidart as ra
+# from bids import BIDSLayout
 from ..interfaces.bids import BIDSDataGrabber, BIDSDataSink
 from ..interfaces.modelgen import GetRunModelInfo, GenerateHigherInfo
 from ..interfaces.io import MergeAll, CollateWithMetadata
@@ -20,7 +19,6 @@ def fsl_run_level_wf(model,
                      output_dir,
                      work_dir,
                      subject_id,
-                     derivatives,
                      database_path,
                      smoothing_fwhm=None,
                      smoothing_level=None,
@@ -29,38 +27,33 @@ def fsl_run_level_wf(model,
                      detrend_poly=None,
                      align_volumes=None,
                      name='fsl_run_level_wf'):
-    """
-    This workflow generates processes function data with information given in
-    the model file
-
-    """
+    """Generate run level workflow for a given model."""
     bids_dir = Path(bids_dir)
     work_dir = Path(work_dir)
     workflow = pe.Workflow(name=name)
-
+    # layout = BIDSLayout.load(database_path)
     level = step['Level']
     if smoothing_type == 'iso':
         dimensionality = 3
     elif smoothing_type == 'inp':
         dimensionality = 2
 
-    fixed_entities = model['Input']['Include']
     workflow.__desc__ = ""
     (work_dir / model['Name']).mkdir(exist_ok=True)
 
-    bdg = pe.Node(
+    getter = pe.Node(
         BIDSDataGrabber(
-            base_dir=bids_dir, subject=subject_id,
-            index_derivatives=derivatives,
+            subject=subject_id,
             database_path=database_path,
-            output_query={'func': {**{'datatype': 'func', 'desc': 'preproc',
-                                      'extension': 'nii.gz', 'suffix': 'bold'},
-                                   **fixed_entities}}),
+            output_query={
+                'bold_files': {**{'datatype': 'func', 'desc': 'preproc',
+                                  'extension': 'nii.gz', 'suffix': 'bold'},
+                               **model['Input']['Include']}}),
         name='func_select')
 
     get_info = pe.MapNode(
         GetRunModelInfo(
-            model=step, bids_dir=bids_dir,
+            model=step, bids_dir=bids_dir, database_path=database_path,
             detrend_poly=detrend_poly, align_volumes=align_volumes),
         iterfield=['functional_file'],
         name=f'get_{level}_info')
@@ -103,7 +96,7 @@ def fsl_run_level_wf(model,
                     output_type='NIFTI_GZ', results_dir='results',
                     autocorr_noestimate=True),
         iterfield=['design_file', 'in_file', 'tcon_file'],
-        name=f'estimate_{level}_model')
+        name=f'model_{level}_estimate')
 
     image_pattern = ('[sub-{subject}/][ses-{session}/]'
                      '[sub-{subject}_][ses-{session}_]'
@@ -121,11 +114,12 @@ def fsl_run_level_wf(model,
         name='rapidart_run')
 
     reshape_rapidart = pe.MapNode(
-        Function(input_names=['run_info', 'func', 'outlier_files',
-                              'contrast_entities'],
+        Function(input_names=['run_info', 'functional_file',
+                              'outlier_file', 'contrast_entities'],
                  output_names=['run_info', 'contrast_entities'],
                  function=utils.reshape_ra),
-        iterfield=['outlier_files', 'run_info', 'func', 'contrast_entities'],
+        iterfield=['run_info', 'functional_file',
+                   'outlier_file', 'contrast_entities'],
         name='reshape_rapidart')
 
     mean_img = pe.MapNode(
@@ -153,33 +147,33 @@ def fsl_run_level_wf(model,
                  output_names=['design_matrix'],
                  function=utils.correct_matrix),
         iterfield=['design_matrix'],
+        run_without_submitting=True,
         name=f'correct_{level}_matrices')
 
     collate = pe.Node(
         MergeAll(
-            ['effect_maps', 'variance_maps', 'tstat_maps',
-             'zscore_maps', 'contrast_metadata'],
+            fields=[
+                'effect_maps', 'variance_maps', 'tstat_maps',
+                'zscore_maps', 'contrast_metadata'],
             check_lengths=True),
         name=f'collate_{level}')
 
     collate_outputs = pe.Node(
         CollateWithMetadata(
             fields=[
-                'effect_maps', 'variance_maps',
-                'tstat_maps', 'zscore_maps'
-            ],
+                'effect_maps', 'variance_maps', 'tstat_maps', 'zscore_maps'],
             field_to_metadata_map={
                 'effect_maps': {'stat': 'effect'},
                 'variance_maps': {'stat': 'variance'},
                 # 'pvalue_maps': {'stat': 'p'},
                 'zscore_maps': {'stat': 'z'},
-                'tstat_maps': {'stat': 't'}
-            }),
+                'tstat_maps': {'stat': 't'}}),
         name=f'collate_{level}_outputs')
 
     plot_matrices = pe.MapNode(
         PlotMatrices(output_dir=output_dir),
         iterfield=['mat_file', 'con_file', 'entities', 'run_info'],
+        run_without_submitting=True,
         name=f'plot_{level}_matrices')
 
     ds_contrast_maps = pe.MapNode(
@@ -191,13 +185,13 @@ def fsl_run_level_wf(model,
 
     wrangle_outputs = pe.Node(
         IdentityInterface(
-            fields=['contrast_metadata', 'contrast_maps', 'brain_mask']),
+            fields=['contrast_metadata', 'contrast_maps']),
         name=f'wrangle_{level}_outputs')
 
     # Setup connections among nodes
     workflow.connect([
-        (bdg, realign_runs, [('func', 'in_file')]),
-        (bdg, get_info, [('func', 'functional_file')]),
+        (getter, realign_runs, [('bold_files', 'in_file')]),
+        (getter, get_info, [('bold_files', 'functional_file')]),
         (get_info, realign_runs, [('reference_image', 'ref_file')]),
     ])
 
@@ -208,11 +202,12 @@ def fsl_run_level_wf(model,
             (get_info, run_rapidart, [('brain_mask', 'mask_file')]),
             (realign_runs, run_rapidart, [('out_file', 'realigned_files')]),
             (run_rapidart, reshape_rapidart, [
-                ('outlier_files', 'outlier_files')]),
+                ('outlier_files', 'outlier_file')]),
             (get_info, reshape_rapidart, [
                 ('run_info', 'run_info'),
                 ('contrast_entities', 'contrast_entities')]),
-            (realign_runs, reshape_rapidart, [('out_file', 'func')]),
+            (realign_runs, reshape_rapidart, [
+                ('out_file', 'functional_file')]),
             (reshape_rapidart, specify_model, [('run_info', 'subject_info')]),
             (reshape_rapidart, plot_matrices, [('run_info', 'run_info')]),
             (reshape_rapidart, collate, [
@@ -299,7 +294,6 @@ def fsl_run_level_wf(model,
 
         (collate_outputs, wrangle_outputs, [('metadata', 'contrast_metadata'),
                                             ('out', 'contrast_maps')]),
-        (get_info, wrangle_outputs, [('brain_mask', 'brain_mask')])
     ])
 
     return workflow
@@ -308,22 +302,25 @@ def fsl_run_level_wf(model,
 def fsl_higher_level_wf(output_dir,
                         work_dir,
                         step,
+                        database_path,
                         # smoothing_fwhm=None,
                         # smoothing_type=None,
+                        align_volumes=None,
                         smoothing_level=None,
                         name='fsl_higher_level_wf'):
     """
+    Produce a second level (across runs) workflow for a given subject.
+
     This workflow generates processes functional_data across a
     single session (read: between runs) and computes
     effects, variances, residuals and statmaps
     using FSLs FLAME0 given information in the bids model file
-
     """
-
     workflow = pe.Workflow(name=name)
     workflow.base_dir = work_dir
     workflow.desc = ""
 
+    # layout = BIDSLayout.load(database_path)
     level = step['Level']
 
     image_pattern = ('[sub-{subject}/][ses-{session}/]'
@@ -334,20 +331,24 @@ def fsl_higher_level_wf(output_dir,
 
     wrangle_inputs = pe.Node(
         IdentityInterface(
-            fields=['contrast_metadata', 'contrast_maps', 'brain_mask']),
+            fields=['contrast_metadata', 'contrast_maps']),
         name=f'wrangle_{level}_inputs')
 
     get_info = pe.Node(
-        GenerateHigherInfo(model=step),
+        GenerateHigherInfo(
+            model=step,
+            database_path=database_path,
+            align_volumes=align_volumes),
         name=f'get_{level}_info')
     if smoothing_level == 'l2':
         pass
 
     estimate_model = pe.MapNode(
         fsl.FLAMEO(run_mode='fe'),
-        iterfield=['design_file', 't_con_file', 'cov_split_file',
-                   'dof_var_cope_file', 'var_cope_file', 'cope_file'],
-        name=f'estimate_{level}_model')
+        iterfield=['design_file', 't_con_file', 'mask_file',
+                   'cov_split_file', 'dof_var_cope_file',
+                   'var_cope_file', 'cope_file'],
+        name=f'model_{level}_estimate')
 
     collate = pe.Node(
         MergeAll(['effect_maps', 'variance_maps', 'tstat_maps',
@@ -368,7 +369,7 @@ def fsl_higher_level_wf(output_dir,
             }),
         name=f'collate_{level}_outputs')
 
-    ds_contrast_maps = pe.Node(
+    ds_contrast_maps = pe.MapNode(
         BIDSDataSink(base_directory=output_dir,
                      path_patterns=image_pattern),
         iterfield=['entities', 'in_file'],
@@ -390,8 +391,8 @@ def fsl_higher_level_wf(output_dir,
             ('covariance_matrices', 'cov_split_file'),
             ('dof_maps', 'dof_var_cope_file'),
             ('variance_maps', 'var_cope_file'),
-            ('effect_maps', 'cope_file')]),
-        (wrangle_inputs, estimate_model, [('brain_mask', 'mask_file')]),
+            ('effect_maps', 'cope_file'),
+            ('brain_mask', 'mask_file')]),
         (estimate_model, collate, [
             ('copes', 'effect_maps'),
             ('var_copes', 'variance_maps'),

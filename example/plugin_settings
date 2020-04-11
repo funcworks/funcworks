@@ -1,3 +1,0 @@
-{"plugin": "SLURM",
- "plugin_args": {"sbatch_args": "-p centos7 --account iacc_madlab --qos pq_madlab"}
- }

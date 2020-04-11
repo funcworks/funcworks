@@ -1,6 +1,5 @@
-# pylint: disable=C0415,C0114,C0115,W0404,W0621,W0612
+"""Interfaces for constructing models in FSL."""
 from pathlib import Path
-from bids.layout.writing import build_path
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec, Bunch, TraitedSpec,
     InputMultiPath, OutputMultiPath, File,
@@ -11,9 +10,10 @@ import numpy as np
 from ..utils import snake_to_camel
 
 
-class GetRunModelInfoInputSpec(BaseInterfaceInputSpec):
+class _GetRunModelInfoInputSpec(BaseInterfaceInputSpec):
     bids_dir = Directory(exists=True, mandatory=True)
     functional_file = File(exists=True, mandatory=True)
+    database_path = Directory(exists=True, mandatory=True)
     model = traits.Dict(mandatory=True)
     detrend_poly = traits.Any(
         default=None,
@@ -25,7 +25,7 @@ class GetRunModelInfoInputSpec(BaseInterfaceInputSpec):
               'if not value is specified, will not functional file'))
 
 
-class GetRunModelInfoOutputSpec(TraitedSpec):
+class _GetRunModelInfoOutputSpec(TraitedSpec):
     run_info = traits.Any(
         desc='Model Info required to construct Run Level Model')
     run_contrasts = traits.List(
@@ -47,34 +47,37 @@ class GetRunModelInfoOutputSpec(TraitedSpec):
 
 
 class GetRunModelInfo(IOBase):
-    '''Grabs EV files for subject based on contrasts of interest'''
-    input_spec = GetRunModelInfoInputSpec
-    output_spec = GetRunModelInfoOutputSpec
+    """Grab files and information needed for an FSL run level model."""
+
+    input_spec = _GetRunModelInfoInputSpec
+    output_spec = _GetRunModelInfoOutputSpec
     # _always_run = True
 
     def _list_outputs(self):
         import json
         import pandas as pd
-
+        from bids import BIDSLayout
+        layout = BIDSLayout.load(self.inputs.database_path)
         outputs = {}
-        (regressors_file, meta_file, events_file,
+
+        (regressor_file, meta_file, events_file,
          outputs['reference_image'], outputs['brain_mask'],
-         outputs['run_entities']) = self._get_required_files()
+         outputs['run_entities']) = self._get_required_files(layout=layout)
 
         outputs['motion_parameters'] = self._get_motion_parameters(
-            regressors_file=regressors_file)
+            regressor_file=regressor_file)
 
         with open(meta_file, 'r') as meta_read:
             run_metadata = json.load(meta_read)
         outputs['repetition_time'] = run_metadata['RepetitionTime']
         (outputs['run_info'], event_regressors,
          confound_regressors) = self._get_model_info(
-             events_file=events_file, regressors_file=regressors_file)
+             events_file=events_file, regressor_file=regressor_file)
         (outputs['run_contrasts'],
          outputs['contrast_names']) = self._get_contrasts(
              event_names=event_regressors)
         all_regressors = event_regressors + confound_regressors
-        n_vols = len(pd.read_csv(regressors_file))
+        n_vols = len(pd.read_csv(regressor_file))
         outputs['run_entities'].update({
             'Volumes': n_vols,
             'DegreesOfFreedom': (n_vols - len(all_regressors))})
@@ -84,54 +87,47 @@ class GetRunModelInfo(IOBase):
 
         if self.inputs.detrend_poly:
             polynomial_names, polynomial_arrays = self._detrend_polynomial(
-                regressors_file, self.inputs.detrend_poly)
+                regressor_file, self.inputs.detrend_poly)
             outputs['run_info'].regressor_names.extend(polynomial_names)
             outputs['run_info'].regressors.extend(polynomial_arrays)
 
         return outputs
 
-    def _get_required_files(self):
+    def _get_required_files(self, layout):
         # A workaround to a current issue in pybids
         # that causes massive resource use when indexing derivative tsv files
         from pathlib import Path
         from bids.layout import parse_file_entities
-        from bids.layout.writing import build_path
         func = Path(self.inputs.functional_file)
         entities = parse_file_entities(str(func))
-        entities.update({'run': '{:02}'.format(entities['run'])})
-        confounds_pattern = ('sub-{subject}_[ses-{session}_]task-{task}_'
-                             'run-{run}_desc-confounds_regressors.tsv')
-        meta_pattern = ('sub-{subject}_[ses-{session}_]task-{task}_'
-                        'run-{run}_[space-{space}_]desc-preproc_bold.json')
-        events_pattern = ('sub-{subject}/[ses-{session}/]{datatype}/'
-                          'sub-{subject}_[ses-{session}_]'
-                          'task-{task}_run-{run}_events.tsv')
-        ref_pattern = ('sub-{subject}_[ses-{session}_]task-{task}_'
-                       'run-{run}_[space-{space}_]boldref.nii.gz')
-        mask_pattern = ('sub-{subject}_[ses-{session}_]task-{task}_'
-                        'run-{run}_[space-{space}_]desc-brain_mask.nii.gz')
-        regressors_file = func.parent / build_path(
-            entities, path_patterns=confounds_pattern)
-        meta_file = func.parent / build_path(
-            entities, path_patterns=meta_pattern)
-        events_file = Path(self.inputs.bids_dir) / build_path(
-            entities, path_patterns=events_pattern)
-        ents = entities.copy()
+        regressor_file = layout.get(
+            **{**entities,
+               'desc': 'confounds', 'space': None,
+               'suffix': 'regressors', 'extension': 'tsv'})[0].path
+
+        meta_file = layout.get(**{**entities, 'extension': 'json'})[0].path
+        events_file = layout.get(
+            **{**entities, 'desc': None, 'space': None,
+               'suffix': 'events', 'extension': 'tsv'})[0].path
+        align_vols = {}
         if self.inputs.align_volumes:
-            ents.update({'run': '{:02d}'.format(self.inputs.align_volumes)})
-        reference_image = func.parent / build_path(
-            ents, path_patterns=ref_pattern)
-        mask_image = func.parent / build_path(
-            ents, path_patterns=mask_pattern)
-        return (regressors_file, meta_file, events_file,
+            align_vols = {'run': self.inputs.align_volumes}
+        reference_image = layout.get(
+            **{**entities, **align_vols,
+               'suffix': 'boldref',
+               'desc': None})[0].path
+        mask_image = layout.get(
+            **{**entities, **align_vols,
+               'desc': 'brain', 'suffix': 'mask'})[0].path
+        return (regressor_file, meta_file, events_file,
                 reference_image, mask_image, entities)
 
-    def _get_model_info(self, events_file, regressors_file):
+    def _get_model_info(self, events_file, regressor_file):
         import pandas as pd
         import numpy as np
 
         event_data = pd.read_csv(events_file, sep='\t')
-        conf_data = pd.read_csv(regressors_file, sep='\t')
+        conf_data = pd.read_csv(regressor_file, sep='\t')
         conf_data.fillna(0, inplace=True)
         level_model = self.inputs.model
         run_info = {'conditions': [],
@@ -161,10 +157,7 @@ class GetRunModelInfo(IOBase):
                 run_info.regressor_names)  # pylint: disable=E1101
 
     def _get_contrasts(self, event_names):
-        """
-        Produces contrasts from a given model file
-        and a run specific events file
-        """
+        """Produce contrasts from a model step."""
         model = self.inputs.model
         contrast_spec = []
         real_contrasts = model["Contrasts"]
@@ -199,22 +192,21 @@ class GetRunModelInfo(IOBase):
         return contrast_spec, contrast_names
 
     @staticmethod
-    def _get_motion_parameters(regressors_file):
-        import os  # pylint: disable=W0621,W0404
+    def _get_motion_parameters(regressor_file):
+        from pathlib import Path
         import pandas as pd
-        motion_params_path = os.path.join(
-            os.getcwd(),
-            os.path.basename(regressors_file).replace('regressors',
-                                                      'motparams'))
+        regressor_file = Path(regressor_file)
+        motparams_path = str(regressor_file.name).replace(
+            'regressors', 'motparams')
+        motparams_path = Path.cwd() / motparams_path
 
-        confound_data = pd.read_csv(regressors_file, sep='\t')
+        confound_data = pd.read_csv(regressor_file, sep='\t')
         # Motion data gets formatted FSL style, with x, y, z rotation,
         # then x,y,z translation
         motion_data = confound_data[['rot_x', 'rot_y', 'rot_z',
                                      'trans_x', 'trans_y', 'trans_z']]
-        motion_data.to_csv(
-            motion_params_path, sep='\t', header=None, index=None)
-        motion_params = motion_params_path
+        motion_data.to_csv(motparams_path, sep='\t', header=None, index=None)
+        motion_params = motparams_path
         return motion_params
 
     @staticmethod
@@ -227,12 +219,12 @@ class GetRunModelInfo(IOBase):
         return contrast_entities
 
     @staticmethod
-    def _detrend_polynomial(regressors_file, detrend_poly=None):
+    def _detrend_polynomial(regressor_file, detrend_poly=None):
         import numpy as np
         import pandas as pd
         from scipy.special import legendre
 
-        regressors_frame = pd.read_csv(regressors_file)
+        regressors_frame = pd.read_csv(regressor_file)
 
         poly_names = []
         poly_arrays = []
@@ -244,17 +236,19 @@ class GetRunModelInfo(IOBase):
         return poly_names, poly_arrays
 
 
-class GenerateHigherInfoInputSpec(BaseInterfaceInputSpec):
+class _GenerateHigherInfoInputSpec(BaseInterfaceInputSpec):
     contrast_maps = InputMultiPath(
         File(exists=True), desc='List of statmaps from previous level')
-    contrast_metadata = InputMultiPath(
-        traits.Dict(desc='Contrast names inherited from previous levels'))
+    contrast_metadata = traits.List(
+        desc='Contrast entities inherited from previous levels')
     model = traits.Dict(desc='Step level information from the model file')
-    align_volumes = traits.Any(
-        default=None, desc='Run to which volumes were aligned at level 1')
+    database_path = Directory(mandatory=True, exists=True)
+    align_volumes = traits.Int(
+        desc=('Target volume for functional realignment',
+              'if not value is specified, will not functional file'))
 
 
-class GenerateHigherInfoOutputSpec(TraitedSpec):
+class _GenerateHigherInfoOutputSpec(TraitedSpec):
     effect_maps = traits.List()
     variance_maps = traits.List()
     dof_maps = traits.List()
@@ -266,104 +260,141 @@ class GenerateHigherInfoOutputSpec(TraitedSpec):
 
 
 class GenerateHigherInfo(IOBase):
-    input_spec = GenerateHigherInfoInputSpec
-    output_spec = GenerateHigherInfoOutputSpec
+    """Generate info for a level higher than first."""
+
+    input_spec = _GenerateHigherInfoInputSpec
+    output_spec = _GenerateHigherInfoOutputSpec
 
     _always_run = True
 
     def _list_outputs(self):
-        organization, dummy_contrasts = self._get_organization()
-        contrast_entities, effect_maps, variance_maps, dof_maps = \
-            self._merge_maps(organization, dummy_contrasts)
-        design_matrices, contrast_matrices, covariance_matrices = \
-            self._produce_matrices(contrast_entities=contrast_entities)
+        from bids import BIDSLayout
+        layout = BIDSLayout.load(self.inputs.database_path)
+        organization = self._get_organization()
+        (contrast_entities, effect_maps,
+         variance_maps, dof_maps,
+         brain_masks) = self._merge_maps(
+             organization=organization, layout=layout)
+        (design_matrices, contrast_matrices,
+         covariance_matrices) = self._produce_matrices(
+             contrast_entities=contrast_entities, layout=layout)
         return {'effect_maps': effect_maps,
                 'variance_maps': variance_maps,
                 'dof_maps': dof_maps,
                 'contrast_metadata': contrast_entities,
                 'contrast_matrices': contrast_matrices,
                 'design_matrices': design_matrices,
-                'covariance_matrices': covariance_matrices}
+                'covariance_matrices': covariance_matrices,
+                'brain_mask': brain_masks}
 
     def _get_organization(self):
         model = self.inputs.model
-
         contrast_zip = zip(self.inputs.contrast_maps,
                            self.inputs.contrast_metadata)
         organization = {}
-        # split_fields = []
-        # if "Transformations" in model:
-        #     if model['Transformations']['Name'] == 'Split':
-        #         split_fields = []
-        for contrast_file, contrast_entities in contrast_zip:
-            if contrast_entities['contrast'] not in organization:
-                organization[contrast_entities['contrast']] = []
-            organization[contrast_entities['contrast']].append(
-                {'File': contrast_file, 'Metadata': contrast_entities})
-
-        # for split_field in split_fields:
-        #     pass
-        dummy_contrasts = []
-        if "DummyContrasts" in model:
-            if 'Conditions' in model['DummyContrasts']:
-                dummy_contrasts = model['DummyContrasts']['Conditions']
+        split_fields = ['contrast', 'space', 'stat']
+        if "Transformations" in model:
+            for transform in model['Transformations']:
+                if transform['Name'] == 'Split':
+                    split_fields.append(transform['By'])
+        for contrast_file, contrast_ents in contrast_zip:
+            if contrast_ents['stat'] not in ['effect', 'variance']:
+                continue
+            fields = ['{' + '{}'.format(field) + '}' for field in split_fields]
+            if 'space' not in contrast_ents.keys():
+                contrast_ents['space'] = 'bold'
+            org_key = '.'.join(fields).format(**contrast_ents)
+            if contrast_ents['space'] == 'bold':
+                contrast_ents['space'] = None
+            degrees_of_freedom = contrast_ents.pop('DegreesOfFreedom', None)
+            if org_key not in organization.keys():
+                organization[org_key] = {'Files': [contrast_file]}
+                organization[org_key]['Metadata'] = contrast_ents.copy()
+                organization[org_key]['Metadata']['DegreesOfFreedom'] = [
+                    degrees_of_freedom]
             else:
-                dummy_contrasts = organization.keys()
-        return organization, dummy_contrasts
+                organization[org_key]['Files'].append(contrast_file)
+                organization[org_key]['Metadata']['DegreesOfFreedom'].append(
+                    degrees_of_freedom)
+        for org_key in organization:
+            organization[org_key]['Metadata']['NumLevelTimepoints'] = len(
+                organization[org_key]['Files'])
+            organization[org_key]['Metadata'].pop('stat', None)
+            organization[org_key]['Metadata'].pop('run', None)
 
-    def _merge_maps(self, organization, dummy_contrasts):
+        return organization
+
+    def _merge_maps(self, organization, layout):
+        merged_patt = ('sub-{subject}_[ses-{session}_][space-{space}_]'
+                       'contrast-{contrast}_stat-{stat}_'
+                       'desc-merged_statmap.nii.gz')
         maps_info = {'effect_maps': [],
                      'dof_maps': [],
                      'variance_maps': [],
-                     'map_entities': []}
-        # mask_pattern = ('sub-{subject}[_ses-{session}]_task-{task}'
-        #                '_run-{run}[_space-{space}]_desc-brain_mask.nii.gz')
-        for dcontrast in dummy_contrasts:
-            dcontrast_info = {'dceffect_maps': [],
-                              'dcvariance_maps': [],
-                              'dcdof_maps': [],
-                              'dcentities': {}}
-            for bids_info in organization[dcontrast]:
-                if 'stat' not in bids_info['Metadata']:
-                    continue
-                if bids_info['Metadata']['stat'] == 'effect':
-                    open_file = nb.load(bids_info['File'])
-                    affine = open_file.affine
-                    dof_file = (np.ones_like(open_file.get_fdata())
-                                * bids_info['Metadata']['DegreesOfFreedom'])
-                    dof_file = nb.nifti1.Nifti1Image(dof_file, affine)
-                    dcontrast_info['dceffect_maps'].append(open_file)
-                    dcontrast_info['dcdof_maps'].append(dof_file)
-                elif bids_info['Metadata']['stat'] == 'variance':
-                    open_file = nb.load(bids_info['File'])
-                    dcontrast_info['dcvariance_maps'].append(open_file)
-                dcontrast_info['dcentities'] = bids_info['Metadata'].copy()
-            for statmap in ['dceffect_maps', 'dcvariance_maps', 'dcdof_maps']:
-                merged_statmap = nb.concat_images(dcontrast_info[statmap])
-                dcontrast_info[statmap] = merged_statmap
-                if statmap == 'dceffect_maps':
-                    dcontrast_info['dcentities'].update(dict(
-                        NumLevelTimepoints=merged_statmap.shape[-1]))
-            dcontrast_info['dcentities'].pop('stat', None)
-            maps_info['map_entities'].append(dcontrast_info['dcentities'])
+                     'map_entities': [],
+                     'mask_files': []}
+        for org in organization:
+            metadata = organization[org]['Metadata']
+            org_files = organization[org]['Files']
+            merged_image = nb.concat_images(
+                [nb.load(file) for file in sorted(org_files)])
 
-            ents = dcontrast_info['dcentities'].copy()
-            ents.update({
-                'contrast': snake_to_camel(
-                    dcontrast_info['dcentities']['contrast'])})
-            merged_pattern = ('sub-{subject}[_ses-{session}]'
-                              '_contrast-{contrast}_stat-{stat}'
-                              '_desc-merged_statmap.nii.gz')
-            for stat in ['effect', 'variance', 'dof']:
-                ents['stat'] = stat
-                map_path = Path.cwd() / build_path(
-                    ents, path_patterns=merged_pattern)
-                nb.nifti1.save(dcontrast_info[f'dc{stat}_maps'], map_path)
-                maps_info[f'{stat}_maps'].append(str(map_path))
+            if 'effect' in org:
+                dof_data = np.ones_like(merged_image.get_fdata())
+                dofs = metadata.pop('DegreesOfFreedom')
+                if self.inputs.align_volumes:
+                    align_volume = self.inputs.align_volumes
+                else:
+                    align_volume = 1
+                mask_path = layout.get(
+                    **{**metadata, 'desc': 'brain',
+                       'suffix': 'mask', 'run': align_volume})
+                if len(mask_path) > 1:
+                    raise ValueError('Entities given produced '
+                                     'more than one mask file')
+                if isinstance(mask_path, list):
+                    mask_path = str(Path(mask_path[0].path).as_posix())
+                maps_info['mask_files'].append(mask_path)
+
+                if metadata['space'] is None:
+                    metadata.pop('space', None)
+                metadata.pop('stat', None)
+                maps_info['map_entities'].append(metadata.copy())
+                metadata['contrast'] = snake_to_camel(metadata['contrast'])
+
+                stat_name = 'dof'
+                for i, dof in enumerate(dofs):
+                    dof_data[:, :, :, i] *= float(dof)
+                dof_path = layout.build_path(
+                    {**metadata, 'stat': stat_name},
+                    path_patterns=merged_patt, validate=False)
+                dof_path = str((Path.cwd() / dof_path).as_posix())
+                dof_image = nb.nifti1.Nifti1Image(
+                    dof_data, merged_image.affine)
+                maps_info['dof_maps'].append(dof_path)
+                nb.nifti1.save(dof_image, dof_path)
+
+                stat_name = 'effect'
+            if 'variance' in org:
+                stat_name = 'variance'
+            merged_path = layout.build_path(
+                {**metadata,
+                 'stat': stat_name,
+                 'desc': 'merged',
+                 'suffix': 'statmap',
+                 'contrast': snake_to_camel(metadata['contrast'])},
+                path_patterns=merged_patt,
+                validate=False)
+            merged_path = str((Path.cwd() / merged_path).as_posix())
+            maps_info[f'{stat_name}_maps'].append(merged_path)
+            nb.nifti1.save(merged_image, merged_path)
+
         return (maps_info['map_entities'], maps_info['effect_maps'],
-                maps_info['variance_maps'], maps_info['dof_maps'])
+                maps_info['variance_maps'], maps_info['dof_maps'],
+                maps_info['mask_files'])
 
-    def _produce_matrices(self, contrast_entities):
+    def _produce_matrices(self, contrast_entities, layout):
+
         matrix_paths = {'design_matrices': [],
                         'contrast_matrices': [],
                         'covariance_matrices': []}
@@ -380,28 +411,28 @@ class GenerateHigherInfo(IOBase):
                         'covariance': ['/NumWaves 1\n',
                                        '/NumPoints {numcopes}\n\n',
                                        '/Matrix\n']}
-        matrix_pattern = ('sub-{subject}[ses-{session}_]'
-                          'contrast-{contrast}_desc-{desc}_design.mat')
+        matrix_patt = ('sub-{subject}_[ses-{session}_]'
+                       'contrast-{contrast}_desc-{desc}_matrix.mat')
         for entity in contrast_entities:
             ents = entity.copy()
-            numcopes = ents['NumLevelTimepoints']
+            ents['contrast'] = snake_to_camel(ents['contrast'])
             for matrix_type in ['design', 'contrast', 'covariance']:
-                ents.update({'desc': 'contrast'})
-                matrix_path = Path.cwd() / build_path(
-                    ents, path_patterns=matrix_pattern)
-                contrast = ents['contrast']
-                ents['contrast'] = snake_to_camel(entity['contrast'])
+                matrix_path = layout.build_path(
+                    {**ents, 'desc': matrix_type},
+                    path_patterns=matrix_patt, validate=False)
+                matrix_path = Path.cwd() / matrix_path
+                matrix_path.unlink(missing_ok=True)  # Remove file if it exists
+                matrix_path = str(matrix_path.as_posix())
                 mat_file = open(matrix_path, 'a')
                 for header_line in header_lines[matrix_type]:
-                    mat_file.writelines(
-                        header_line.format(contrast=contrast,
-                                           numcopes=numcopes))
-                if matrix_type == 'covariance':
-                    for _ in range(numcopes):
+                    mat_file.writelines(header_line.format(
+                        contrast=entity['contrast'],
+                        numcopes=ents['NumLevelTimepoints']))
+                if matrix_type != 'contrast':
+                    for _ in range(ents['NumLevelTimepoints']):
                         mat_file.writelines('1\n')
                 mat_file.close()
-                matrix_paths[f'{matrix_type}_matrices'].append(
-                    str(matrix_path))
+                matrix_paths[f'{matrix_type}_matrices'].append(matrix_path)
         return (matrix_paths['design_matrices'],
                 matrix_paths['contrast_matrices'],
                 matrix_paths['covariance_matrices'])

@@ -1,6 +1,4 @@
-"""
-Main run script
-"""
+"""Main run script."""
 # pylint: disable=C0103,R0913,R0914,W0404,C0116,W0212,W0613,W0611,W1202,C0415
 import gc
 import sys
@@ -19,6 +17,7 @@ logger = logging.getLogger('cli')
 
 
 def check_deps(workflow):
+    """Make sure workflow dependencies are present before runtime."""
     from nipype.utils.filemanip import which
     return sorted(
         (node.interface.__class__.__name__, node.interface._cmd)
@@ -32,7 +31,7 @@ def _warn_redirect(message, category, filename, lineno, file=None, line=None):
 
 
 def get_parser():
-    """Build Parser Object"""
+    """Build Parser Object."""
     parser = ArgumentParser(
         description='FUNCWORKs: fMRI FUNCtional WORKflows',
         formatter_class=ArgumentDefaultsHelpFormatter)
@@ -73,7 +72,6 @@ def get_parser():
     )
     parser.add_argument(
         '-w', '--work_dir', action='store', type=Path,
-        default=mkdtemp(),
         help='path where intermediate results should be stored')
     parser.add_argument(
         '--use-rapidart', action='store_true', default=False,
@@ -92,14 +90,13 @@ def get_parser():
         'in the model file for the boldref and brain_mask')
     parser.add_argument(
         '--database-path', action='store',
-        default=None, type=Path,
         help='Path to existing directory containing BIDS '
              'Database files useful for speeding up run-time')
     return parser
 
 
 def main():
-    """Entry Point"""
+    """Entry Point."""
     from multiprocessing import set_start_method, Process, Manager
     set_start_method('spawn')
     warnings.showwarning = _warn_redirect
@@ -172,8 +169,8 @@ def main():
 
 def build_workflow(opts, retval):
     """
-    Create the Nipype Workflow that supports the whole execution
-    graph, given the inputs.
+    Create the Nipype Workflow for a graph given the inputs.
+
     All the checks and the construction of the workflow are done
     inside this function that has pickleable inputs and output
     dictionary (``retval``) to allow isolation using a
@@ -197,7 +194,7 @@ def build_workflow(opts, retval):
     """.format
     output_dir = opts.output_dir.resolve()
     bids_dir = opts.bids_dir.resolve()
-    work_dir = opts.work_dir.resolve()
+    work_dir = mkdtemp() if opts.work_dir is None else opts.work_dir.resolve()
     retval['return_code'] = 1
     retval['workflow'] = None
     retval['bids_dir'] = bids_dir
@@ -212,10 +209,7 @@ def build_workflow(opts, retval):
             reset_database=True)
     else:
         database_path = opts.database_path
-        layout = BIDSLayout(
-            bids_dir, derivatives=opts.derivatives, validate=True,
-            database_file=database_path,
-            reset_database=False)
+        layout = BIDSLayout.load(database_path)
 
     if output_dir == bids_dir:
         build_log.error(
@@ -338,7 +332,6 @@ def build_workflow(opts, retval):
         participants=retval['participant_label'],
         analysis_level=opts.analysis_level,
         smoothing=opts.smoothing,
-        derivatives=opts.derivatives,
         run_uuid=run_uuid,
         use_rapidart=opts.use_rapidart,
         detrend_poly=opts.detrend_poly,

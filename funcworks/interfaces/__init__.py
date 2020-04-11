@@ -1,0 +1,1 @@
+"""Instantiate funcworks.interfaces submodule."""
