@@ -72,7 +72,6 @@ def get_parser():
     )
     parser.add_argument(
         '-w', '--work_dir', action='store', type=Path,
-        default=mkdtemp(),
         help='path where intermediate results should be stored')
     parser.add_argument(
         '--use-rapidart', action='store_true', default=False,
@@ -195,7 +194,7 @@ def build_workflow(opts, retval):
     """.format
     output_dir = opts.output_dir.resolve()
     bids_dir = opts.bids_dir.resolve()
-    work_dir = opts.work_dir.resolve()
+    work_dir = mkdtemp() if opts.work_dir is None else opts.work_dir.resolve()
     retval['return_code'] = 1
     retval['workflow'] = None
     retval['bids_dir'] = bids_dir

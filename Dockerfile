@@ -124,7 +124,7 @@ RUN echo "Downloading Miniconda installer ..." \
 COPY ./ /scripts/
 USER root
 RUN chmod 755 -R /scripts/
-RUN conda create -y -q --name neuro python=3.7 \
+RUN conda create -y -q --name neuro python=3.8 \
     && sync && conda clean --all && sync \
     && /bin/bash -c "source activate neuro \
       && pip install /scripts/"\

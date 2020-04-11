@@ -345,8 +345,9 @@ def fsl_higher_level_wf(output_dir,
 
     estimate_model = pe.MapNode(
         fsl.FLAMEO(run_mode='fe'),
-        iterfield=['design_file', 't_con_file', 'cov_split_file',
-                   'dof_var_cope_file', 'var_cope_file', 'cope_file'],
+        iterfield=['design_file', 't_con_file', 'mask_file',
+                   'cov_split_file', 'dof_var_cope_file',
+                   'var_cope_file', 'cope_file'],
         name=f'model_{level}_estimate')
 
     collate = pe.Node(
@@ -368,7 +369,7 @@ def fsl_higher_level_wf(output_dir,
             }),
         name=f'collate_{level}_outputs')
 
-    ds_contrast_maps = pe.Node(
+    ds_contrast_maps = pe.MapNode(
         BIDSDataSink(base_directory=output_dir,
                      path_patterns=image_pattern),
         iterfield=['entities', 'in_file'],

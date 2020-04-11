@@ -120,6 +120,7 @@ def init_funcworks_subject_wf(model,
                 # smoothing_fwhm=smoothing_fwhm,
                 smoothing_level=smoothing_level,
                 # smoothing_type=smoothing_type,
+                align_volumes=align_volumes,
                 name=f'fsl_{level}_level_wf')
             workflow.connect([
                 (stage, model, [

@@ -243,8 +243,7 @@ class _GenerateHigherInfoInputSpec(BaseInterfaceInputSpec):
         desc='Contrast entities inherited from previous levels')
     model = traits.Dict(desc='Step level information from the model file')
     database_path = Directory(mandatory=True, exists=True)
-    align_volumes = traits.Any(
-        default=None,
+    align_volumes = traits.Int(
         desc=('Target volume for functional realignment',
               'if not value is specified, will not functional file'))
 
@@ -326,7 +325,7 @@ class GenerateHigherInfo(IOBase):
         return organization
 
     def _merge_maps(self, organization, layout):
-        merged_patt = ('sub-{subject}_[ses-{session}_]'
+        merged_patt = ('sub-{subject}_[ses-{session}_][space-{space}_]'
                        'contrast-{contrast}_stat-{stat}_'
                        'desc-merged_statmap.nii.gz')
         maps_info = {'effect_maps': [],
@@ -343,6 +342,22 @@ class GenerateHigherInfo(IOBase):
             if 'effect' in org:
                 dof_data = np.ones_like(merged_image.get_fdata())
                 dofs = metadata.pop('DegreesOfFreedom')
+                if self.inputs.align_volumes:
+                    align_volume = self.inputs.align_volumes
+                else:
+                    align_volume = 1
+                mask_path = layout.get(
+                    **{**metadata, 'desc': 'brain',
+                       'suffix': 'mask', 'run': align_volume})
+                if len(mask_path) > 1:
+                    raise ValueError('Entities given produced '
+                                     'more than one mask file')
+                if isinstance(mask_path, list):
+                    mask_path = str(Path(mask_path[0].path).as_posix())
+                maps_info['mask_files'].append(mask_path)
+
+                if metadata['space'] is None:
+                    metadata.pop('space', None)
                 metadata.pop('stat', None)
                 maps_info['map_entities'].append(metadata.copy())
                 metadata['contrast'] = snake_to_camel(metadata['contrast'])
@@ -358,19 +373,6 @@ class GenerateHigherInfo(IOBase):
                     dof_data, merged_image.affine)
                 maps_info['dof_maps'].append(dof_path)
                 nb.nifti1.save(dof_image, dof_path)
-
-                align_volume = 1
-                if self.inputs.align_volumes:
-                    align_volume = self.inputs.align_volumes
-                mask_path = layout.get(
-                    **{**metadata, 'desc': 'brain',
-                       'suffix': 'mask', 'run': align_volume})
-                if len(mask_path) > 1:
-                    raise ValueError('Entities given produced '
-                                     'more than one mask file')
-                if isinstance(mask_path, list):
-                    mask_path = str(Path(mask_path[0].path).as_posix())
-                maps_info['mask_files'].append(mask_path)
 
                 stat_name = 'effect'
             if 'variance' in org:
@@ -418,13 +420,15 @@ class GenerateHigherInfo(IOBase):
                 matrix_path = layout.build_path(
                     {**ents, 'desc': matrix_type},
                     path_patterns=matrix_patt, validate=False)
-                matrix_path = str((Path.cwd() / matrix_path).as_posix())
+                matrix_path = Path.cwd() / matrix_path
+                matrix_path.unlink(missing_ok=True)  # Remove file if it exists
+                matrix_path = str(matrix_path.as_posix())
                 mat_file = open(matrix_path, 'a')
                 for header_line in header_lines[matrix_type]:
                     mat_file.writelines(header_line.format(
                         contrast=entity['contrast'],
                         numcopes=ents['NumLevelTimepoints']))
-                if matrix_type == 'covariance':
+                if matrix_type != 'contrast':
                     for _ in range(ents['NumLevelTimepoints']):
                         mat_file.writelines('1\n')
                 mat_file.close()
