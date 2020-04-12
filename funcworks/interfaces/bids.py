@@ -151,7 +151,7 @@ def _copy_or_convert(in_file, out_file):
     else:
         return
 
-    raise RuntimeError("Cannot convert {} to {}".format(in_ext, out_ext))
+    raise RuntimeError(f"Cannot convert {in_ext} to {out_ext}")
 
 
 class _BIDSDataGrabberInputSpec(DynamicTraitedSpec):

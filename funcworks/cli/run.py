@@ -141,7 +141,7 @@ def main():
     if missing:
         print("Cannot run FUNCWorks. Missing dependencies:", file=sys.stderr)
         for iface, cmd in missing:
-            print("\t{} (Interface: {})".format(cmd, iface))
+            print(f"\t{cmd} (Interface: {iface})")
         sys.exit(2)
     # Clean up master process before running workflow, which may create forks
     gc.collect()
@@ -186,12 +186,6 @@ def build_workflow(opts, retval):
 
     build_log = nlogging.getLogger('nipype.workflow')
 
-    INIT_MSG = """
-    Running FUNCWORKS version {version}:
-      * BIDS dataset path: {bids_dir}.
-      * Participant list: {participant_label}.
-      * Run identifier: {uuid}.
-    """.format
     output_dir = opts.output_dir.resolve()
     bids_dir = opts.bids_dir.resolve()
     work_dir = mkdtemp() if opts.work_dir is None else opts.work_dir.resolve()
@@ -311,10 +305,13 @@ def build_workflow(opts, retval):
     #     return retval
 
     # Build main workflow
-    build_log.log(25, INIT_MSG(version=__version__,
-                               bids_dir=bids_dir,
-                               participant_label=retval['participant_label'],
-                               uuid=run_uuid))
+    build_log.log(25, (
+        f"""
+        Running FUNCWORKS version {__version__}:
+          * BIDS dataset path: {bids_dir}.
+          * Participant list: {retval['participant_label']}.
+          * Run identifier: {run_uuid}.
+        """))
 
     if not opts.model_file:
         model_file = Path(bids_dir) / 'models' / 'model-default_smdl.json'
