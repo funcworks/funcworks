@@ -98,6 +98,14 @@ def fsl_run_level_wf(model,
         iterfield=['design_file', 'in_file', 'tcon_file'],
         name=f'model_{level}_estimate')
 
+    calculate_p = pe.MapNode(
+        fsl.ImageMaths(environ={'FSLOUTPUTTYPE': 'NIFTI_GZ'},
+                       output_type='NIFTI_GZ',
+                       op_string='-ztop',
+                       suffix='_pval'),
+        iterfield=['in_file'],
+        name=f'model_{level}_calculate_pval')
+
     image_pattern = ('[sub-{subject}/][ses-{session}/]'
                      '[sub-{subject}_][ses-{session}_]'
                      'task-{task}_[acq-{acquisition}_]'
@@ -165,7 +173,7 @@ def fsl_run_level_wf(model,
             field_to_metadata_map={
                 'effect_maps': {'stat': 'effect'},
                 'variance_maps': {'stat': 'variance'},
-                # 'pvalue_maps': {'stat': 'p'},
+                'pvalue_maps': {'stat': 'p'},
                 'zscore_maps': {'stat': 'z'},
                 'tstat_maps': {'stat': 't'}}),
         name=f'collate_{level}_outputs')
@@ -274,24 +282,22 @@ def fsl_run_level_wf(model,
     workflow.connect([
         (get_info, plot_matrices, [('run_entities', 'entities')]),
         (generate_model, plot_matrices, [('con_file', 'con_file')]),
-
         (fit_model, estimate_model, [('functional_data', 'in_file')]),
         (generate_model, estimate_model, [('con_file', 'tcon_file')]),
-
+        (estimate_model, calculate_p, [('zstats', 'in_file')]),
         (estimate_model, collate, [('copes', 'effect_maps'),
                                    ('varcopes', 'variance_maps'),
                                    ('tstats', 'tstat_maps'),
                                    ('zstats', 'zscore_maps')]),
-
+        (calculate_p, collate, [('out_file', 'pvalue_maps')]),
         (collate, collate_outputs, [('effect_maps', 'effect_maps'),
                                     ('variance_maps', 'variance_maps'),
                                     ('tstat_maps', 'tstat_maps'),
                                     ('zscore_maps', 'zscore_maps'),
+                                    ('pvalue_maps', 'pvalue_maps'),
                                     ('contrast_metadata', 'metadata')]),
-
         (collate_outputs, ds_contrast_maps, [('out', 'in_file'),
                                              ('metadata', 'entities')]),
-
         (collate_outputs, wrangle_outputs, [('metadata', 'contrast_metadata'),
                                             ('out', 'contrast_maps')]),
     ])
@@ -350,6 +356,14 @@ def fsl_higher_level_wf(output_dir,
                    'var_cope_file', 'cope_file'],
         name=f'model_{level}_estimate')
 
+    calculate_p = pe.MapNode(
+        fsl.ImageMaths(environ={'FSLOUTPUTTYPE': 'NIFTI_GZ'},
+                       output_type='NIFTI_GZ',
+                       op_string='-ztop',
+                       suffix='_pval'),
+        iterfield=['in_file'],
+        name=f'model_{level}_calculate_pval')
+
     collate = pe.Node(
         MergeAll(['effect_maps', 'variance_maps', 'tstat_maps',
                   'zscore_maps', 'contrast_metadata'],
@@ -363,7 +377,7 @@ def fsl_higher_level_wf(output_dir,
             field_to_metadata_map={
                 'effect_maps': {'stat': 'effect'},
                 'variance_maps': {'stat': 'variance'},
-                # 'pvalue_maps': {'stat': 'p'},
+                'pvalue_maps': {'stat': 'p'},
                 'zscore_maps': {'stat': 'z'},
                 'tstat_maps': {'stat': 't'}
             }),
@@ -393,17 +407,20 @@ def fsl_higher_level_wf(output_dir,
             ('variance_maps', 'var_cope_file'),
             ('effect_maps', 'cope_file'),
             ('brain_mask', 'mask_file')]),
+        (estimate_model, calculate_p, [('zstats', 'in_file')]),
         (estimate_model, collate, [
             ('copes', 'effect_maps'),
             ('var_copes', 'variance_maps'),
             ('tstats', 'tstat_maps'),
             ('zstats', 'zscore_maps')]),
+        (calculate_p, collate, [('out_file', 'pvalue_maps')])
         (get_info, collate, [('contrast_metadata', 'contrast_metadata')]),
         (collate, collate_outputs, [
             ('effect_maps', 'effect_maps'),
             ('variance_maps', 'variance_maps'),
             ('tstat_maps', 'tstat_maps'),
             ('zscore_maps', 'zscore_maps'),
+            ('pvalue_maps', 'pvalue_maps'),
             ('contrast_metadata', 'metadata')]),
         (collate_outputs, ds_contrast_maps, [
             ('out', 'in_file'),
