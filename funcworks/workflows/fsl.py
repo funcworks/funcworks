@@ -162,14 +162,15 @@ def fsl_run_level_wf(model,
         MergeAll(
             fields=[
                 'effect_maps', 'variance_maps', 'tstat_maps',
-                'zscore_maps', 'contrast_metadata'],
+                'pvalue_maps', 'zscore_maps', 'contrast_metadata'],
             check_lengths=True),
         name=f'collate_{level}')
 
     collate_outputs = pe.Node(
         CollateWithMetadata(
             fields=[
-                'effect_maps', 'variance_maps', 'tstat_maps', 'zscore_maps'],
+                'effect_maps', 'variance_maps', 'pvalue_maps',
+                'zscore_maps', 'tstat_maps'],
             field_to_metadata_map={
                 'effect_maps': {'stat': 'effect'},
                 'variance_maps': {'stat': 'variance'},
@@ -366,14 +367,15 @@ def fsl_higher_level_wf(output_dir,
 
     collate = pe.Node(
         MergeAll(['effect_maps', 'variance_maps', 'tstat_maps',
-                  'zscore_maps', 'contrast_metadata'],
+                  'pvalue_maps', 'zscore_maps', 'contrast_metadata'],
                  check_lengths=False),
         name=f'collate_{level}_level')
 
     collate_outputs = pe.Node(
         CollateWithMetadata(
             fields=[
-                'effect_maps', 'variance_maps', 'tstat_maps', 'zscore_maps'],
+                'effect_maps', 'variance_maps', 'tstat_maps',
+                'pvalue_maps', 'zscore_maps'],
             field_to_metadata_map={
                 'effect_maps': {'stat': 'effect'},
                 'variance_maps': {'stat': 'variance'},
