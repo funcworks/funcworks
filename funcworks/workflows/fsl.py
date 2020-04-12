@@ -5,7 +5,6 @@ from nipype.pipeline import engine as pe
 from nipype.interfaces import fsl
 from nipype.interfaces.utility import Function, IdentityInterface, Merge
 from nipype.algorithms import modelgen, rapidart as ra
-# from bids import BIDSLayout
 from ..interfaces.bids import BIDSDataGrabber, BIDSDataSink
 from ..interfaces.modelgen import GetRunModelInfo, GenerateHigherInfo
 from ..interfaces.io import MergeAll, CollateWithMetadata
@@ -31,7 +30,7 @@ def fsl_run_level_wf(model,
     bids_dir = Path(bids_dir)
     work_dir = Path(work_dir)
     workflow = pe.Workflow(name=name)
-    # layout = BIDSLayout.load(database_path)
+
     level = step['Level']
     if smoothing_type == 'iso':
         dimensionality = 3
@@ -46,9 +45,10 @@ def fsl_run_level_wf(model,
             subject=subject_id,
             database_path=database_path,
             output_query={
-                'bold_files': {**{'datatype': 'func', 'desc': 'preproc',
-                                  'extension': 'nii.gz', 'suffix': 'bold'},
-                               **model['Input']['Include']}}),
+                'bold_files': {
+                    **{'datatype': 'func', 'desc': 'preproc',
+                       'extension': 'nii.gz', 'suffix': 'bold'},
+                    **model['Input']['Include']}}),
         name='func_select')
 
     get_info = pe.MapNode(
@@ -59,52 +59,59 @@ def fsl_run_level_wf(model,
         name=f'get_{level}_info')
 
     realign_runs = pe.MapNode(
-        fsl.MCFLIRT(interpolation='sinc'),
+        fsl.MCFLIRT(
+            output_type='NIFTI_GZ',
+            interpolation='sinc'),
         iterfield=['in_file', 'ref_file'],
         name='func_realign')
 
     specify_model = pe.MapNode(
         modelgen.SpecifyModel(
-            high_pass_filter_cutoff=-1.0, input_units='secs'),
+            high_pass_filter_cutoff=-1.0,
+            input_units='secs'),
         iterfield=['functional_runs', 'subject_info', 'time_repetition'],
         name=f'model_{level}_specify')
 
     fit_model = pe.MapNode(
-        IdentityInterface(fields=['session_info', 'interscan_interval',
-                                  'contrasts', 'functional_data'],
-                          mandatory_inputs=True),
-        iterfield=['functional_data', 'session_info',
-                   'interscan_interval', 'contrasts'],
+        IdentityInterface(
+            fields=[
+                'session_info', 'interscan_interval',
+                'contrasts', 'functional_data'],
+            mandatory_inputs=True),
+        iterfield=[
+            'functional_data', 'session_info',
+            'interscan_interval', 'contrasts'],
         name=f'model_{level}_fit')
 
     first_level_design = pe.MapNode(
-        fsl.Level1Design(bases={'dgamma': {'derivs': False}},
-                         model_serial_correlations=False),
+        fsl.Level1Design(
+            bases={
+                'dgamma': {'derivs': False}},
+            model_serial_correlations=False),
         iterfield=['session_info', 'interscan_interval', 'contrasts'],
         name=f'model_{level}_design')
 
     generate_model = pe.MapNode(
-        fsl.FEATModel(environ={'FSLOUTPUTTYPE': 'NIFTI_GZ'},
-                      output_type='NIFTI_GZ'),
+        fsl.FEATModel(
+            output_type='NIFTI_GZ'),
         iterfield=['fsf_file', 'ev_files'],
         name=f'model_{level}_generate')
 
     estimate_model = pe.MapNode(
-        fsl.FILMGLS(environ={'FSLOUTPUTTYPE': 'NIFTI_GZ'},
-                    mask_size=5, threshold=0.0,
-                    # smooth_autocorr=True
-                    output_type='NIFTI_GZ', results_dir='results',
-                    autocorr_noestimate=True),
+        fsl.FILMGLS(
+            mask_size=5, threshold=0.0,  # smooth_autocorr=True
+            output_type='NIFTI_GZ', results_dir='results',
+            autocorr_noestimate=True),
         iterfield=['design_file', 'in_file', 'tcon_file'],
         name=f'model_{level}_estimate')
 
     calculate_p = pe.MapNode(
-        fsl.ImageMaths(environ={'FSLOUTPUTTYPE': 'NIFTI_GZ'},
-                       output_type='NIFTI_GZ',
-                       op_string='-ztop',
-                       suffix='_pval'),
+        fsl.ImageMaths(
+            output_type='NIFTI_GZ',
+            op_string='-ztop',
+            suffix='_pval'),
         iterfield=['in_file'],
-        name=f'model_{level}_calculate_pval')
+        name=f'model_{level}_caculate_p')
 
     image_pattern = ('[sub-{subject}/][ses-{session}/]'
                      '[sub-{subject}_][ses-{session}_]'
@@ -114,46 +121,60 @@ def fsl_run_level_wf(model,
                      'stat-{stat<effect|variance|z|p|t|F>}_statmap.nii.gz')
 
     run_rapidart = pe.MapNode(
-        ra.ArtifactDetect(use_differences=[True, False], use_norm=True,
-                          zintensity_threshold=3, norm_threshold=1,
-                          bound_by_brainmask=True, mask_type='file',
-                          parameter_source='FSL'),
+        ra.ArtifactDetect(
+            use_differences=[True, False], use_norm=True,
+            zintensity_threshold=3, norm_threshold=1,
+            bound_by_brainmask=True, mask_type='file',
+            parameter_source='FSL'),
         iterfield=['realignment_parameters', 'realigned_files', 'mask_file'],
         name='rapidart_run')
 
     reshape_rapidart = pe.MapNode(
-        Function(input_names=['run_info', 'functional_file',
-                              'outlier_file', 'contrast_entities'],
-                 output_names=['run_info', 'contrast_entities'],
-                 function=utils.reshape_ra),
+        Function(
+            input_names=[
+                'run_info', 'functional_file',
+                'outlier_file', 'contrast_entities'],
+            output_names=[
+                'run_info', 'contrast_entities'],
+            function=utils.reshape_ra),
         iterfield=['run_info', 'functional_file',
                    'outlier_file', 'contrast_entities'],
         name='reshape_rapidart')
 
     mean_img = pe.MapNode(
-        fsl.ImageMaths(op_string='-Tmean', suffix='_mean'),
+        fsl.ImageMaths(
+            output_type='NIFTI_GZ',
+            op_string='-Tmean',
+            suffix='_mean'),
         iterfield=['in_file', 'mask_file'],
         name='smooth_susan_avgimg')
 
     median_img = pe.MapNode(
-        fsl.ImageStats(op_string='-k %s -p 50'),
+        fsl.ImageStats(
+            output_type='NIFTI_GZ',
+            op_string='-k %s -p 50'),
         iterfield=['in_file', 'mask_file'],
         name='smooth_susan_medimg')
 
     merge = pe.Node(
-        Merge(2, axis='hstack'),
+        Merge(
+            2, axis='hstack'),
         name='smooth_merge')
 
     run_susan = pe.MapNode(
-        fsl.SUSAN(fwhm=smoothing_fwhm, dimension=dimensionality),
+        fsl.SUSAN(
+            output_type='NIFTI_GZ',
+            fwhm=smoothing_fwhm,
+            dimension=dimensionality),
         iterfield=['in_file', 'brightness_threshold', 'usans'],
         name='smooth_susan')
     # Exists solely to correct undesirable behavior of FSL
     # that results in loss of constant columns
     correct_matrices = pe.MapNode(
-        Function(input_names=['design_matrix'],
-                 output_names=['design_matrix'],
-                 function=utils.correct_matrix),
+        Function(
+            input_names=['design_matrix'],
+            output_names=['design_matrix'],
+            function=utils.correct_matrix),
         iterfield=['design_matrix'],
         run_without_submitting=True,
         name=f'correct_{level}_matrices')
@@ -161,33 +182,35 @@ def fsl_run_level_wf(model,
     collate = pe.Node(
         MergeAll(
             fields=[
-                'effect_maps', 'variance_maps', 'tstat_maps',
-                'pvalue_maps', 'zscore_maps', 'contrast_metadata'],
+                'effect_maps', 'variance_maps', 'zscore_maps',
+                'pvalue_maps', 'tstat_maps', 'contrast_metadata'],
             check_lengths=True),
         name=f'collate_{level}')
 
     collate_outputs = pe.Node(
         CollateWithMetadata(
             fields=[
-                'effect_maps', 'variance_maps', 'pvalue_maps',
-                'zscore_maps', 'tstat_maps'],
+                'effect_maps', 'variance_maps', 'zscore_maps',
+                'pvalue_maps', 'tstat_maps'],
             field_to_metadata_map={
                 'effect_maps': {'stat': 'effect'},
                 'variance_maps': {'stat': 'variance'},
-                'pvalue_maps': {'stat': 'p'},
                 'zscore_maps': {'stat': 'z'},
+                'pvalue_maps': {'stat': 'p'},
                 'tstat_maps': {'stat': 't'}}),
         name=f'collate_{level}_outputs')
 
     plot_matrices = pe.MapNode(
-        PlotMatrices(output_dir=output_dir),
+        PlotMatrices(
+            output_dir=output_dir),
         iterfield=['mat_file', 'con_file', 'entities', 'run_info'],
         run_without_submitting=True,
         name=f'plot_{level}_matrices')
 
     ds_contrast_maps = pe.MapNode(
-        BIDSDataSink(base_directory=output_dir,
-                     path_patterns=image_pattern),
+        BIDSDataSink(
+            base_directory=output_dir,
+            path_patterns=image_pattern),
         iterfield=['entities', 'in_file'],
         run_without_submitting=True,
         name=f'ds_{level}_contrast_maps')
@@ -285,17 +308,18 @@ def fsl_run_level_wf(model,
         (generate_model, plot_matrices, [('con_file', 'con_file')]),
         (fit_model, estimate_model, [('functional_data', 'in_file')]),
         (generate_model, estimate_model, [('con_file', 'tcon_file')]),
-        (estimate_model, calculate_p, [('zstats', 'in_file')]),
+        (estimate_model, calculate_p, [
+            (('zstats', utils.flatten), 'in_file')]),
         (estimate_model, collate, [('copes', 'effect_maps'),
                                    ('varcopes', 'variance_maps'),
-                                   ('tstats', 'tstat_maps'),
-                                   ('zstats', 'zscore_maps')]),
+                                   ('zstats', 'zscore_maps'),
+                                   ('tstats', 'tstat_maps')]),
         (calculate_p, collate, [('out_file', 'pvalue_maps')]),
         (collate, collate_outputs, [('effect_maps', 'effect_maps'),
                                     ('variance_maps', 'variance_maps'),
-                                    ('tstat_maps', 'tstat_maps'),
                                     ('zscore_maps', 'zscore_maps'),
                                     ('pvalue_maps', 'pvalue_maps'),
+                                    ('tstat_maps', 'tstat_maps'),
                                     ('contrast_metadata', 'metadata')]),
         (collate_outputs, ds_contrast_maps, [('out', 'in_file'),
                                              ('metadata', 'entities')]),
@@ -310,8 +334,8 @@ def fsl_higher_level_wf(output_dir,
                         work_dir,
                         step,
                         database_path,
-                        # smoothing_fwhm=None,
-                        # smoothing_type=None,
+                        smoothing_fwhm=None,
+                        smoothing_type=None,
                         align_volumes=None,
                         smoothing_level=None,
                         name='fsl_higher_level_wf'):
@@ -347,54 +371,63 @@ def fsl_higher_level_wf(output_dir,
             database_path=database_path,
             align_volumes=align_volumes),
         name=f'get_{level}_info')
+
     if smoothing_level == 'l2':
+        smoothing_fwhm
+        smoothing_type
         pass
 
     estimate_model = pe.MapNode(
-        fsl.FLAMEO(run_mode='fe'),
+        fsl.FLAMEO(
+            output_type='NIFTI_GZ',
+            run_mode='fe'),
         iterfield=['design_file', 't_con_file', 'mask_file',
                    'cov_split_file', 'dof_var_cope_file',
                    'var_cope_file', 'cope_file'],
         name=f'model_{level}_estimate')
 
     calculate_p = pe.MapNode(
-        fsl.ImageMaths(environ={'FSLOUTPUTTYPE': 'NIFTI_GZ'},
-                       output_type='NIFTI_GZ',
-                       op_string='-ztop',
-                       suffix='_pval'),
+        fsl.ImageMaths(
+            output_type='NIFTI_GZ',
+            op_string='-ztop',
+            suffix='_pval'),
         iterfield=['in_file'],
-        name=f'model_{level}_calculate_pval')
+        name=f'model_{level}_caculate_p')
 
     collate = pe.Node(
-        MergeAll(['effect_maps', 'variance_maps', 'tstat_maps',
-                  'pvalue_maps', 'zscore_maps', 'contrast_metadata'],
-                 check_lengths=False),
+        MergeAll(
+            fields=[
+                'effect_maps', 'variance_maps', 'zscore_maps',
+                'pvalue_maps', 'tstat_maps', 'contrast_metadata'],
+            check_lengths=False),
         name=f'collate_{level}_level')
 
     collate_outputs = pe.Node(
         CollateWithMetadata(
             fields=[
-                'effect_maps', 'variance_maps', 'tstat_maps',
-                'pvalue_maps', 'zscore_maps'],
+                'effect_maps', 'variance_maps', 'zscore_maps',
+                'pvalue_maps', 'tstat_maps'],
             field_to_metadata_map={
                 'effect_maps': {'stat': 'effect'},
                 'variance_maps': {'stat': 'variance'},
-                'pvalue_maps': {'stat': 'p'},
                 'zscore_maps': {'stat': 'z'},
+                'pvalue_maps': {'stat': 'p'},
                 'tstat_maps': {'stat': 't'}
             }),
         name=f'collate_{level}_outputs')
 
     ds_contrast_maps = pe.MapNode(
-        BIDSDataSink(base_directory=output_dir,
-                     path_patterns=image_pattern),
+        BIDSDataSink(
+            base_directory=output_dir,
+            path_patterns=image_pattern),
         iterfield=['entities', 'in_file'],
         run_without_submitting=True,
         name=f'ds_{level}_contrast_maps')
 
     wrangle_outputs = pe.Node(
         IdentityInterface(
-            fields=['contrast_metadata', 'contrast_maps', 'brain_mask']),
+            fields=[
+                'contrast_metadata', 'contrast_maps', 'brain_mask']),
         name=f'wrangle_{level}_outputs')
 
     workflow.connect([
@@ -413,16 +446,16 @@ def fsl_higher_level_wf(output_dir,
         (estimate_model, collate, [
             ('copes', 'effect_maps'),
             ('var_copes', 'variance_maps'),
-            ('tstats', 'tstat_maps'),
-            ('zstats', 'zscore_maps')]),
-        (calculate_p, collate, [('out_file', 'pvalue_maps')])
+            ('zstats', 'zscore_maps'),
+            ('tstats', 'tstat_maps')]),
+        (calculate_p, collate, [('out_file', 'pvalue_maps')]),
         (get_info, collate, [('contrast_metadata', 'contrast_metadata')]),
         (collate, collate_outputs, [
             ('effect_maps', 'effect_maps'),
             ('variance_maps', 'variance_maps'),
-            ('tstat_maps', 'tstat_maps'),
             ('zscore_maps', 'zscore_maps'),
             ('pvalue_maps', 'pvalue_maps'),
+            ('tstat_maps', 'tstat_maps'),
             ('contrast_metadata', 'metadata')]),
         (collate_outputs, ds_contrast_maps, [
             ('out', 'in_file'),

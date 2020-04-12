@@ -86,3 +86,9 @@ def correct_matrix(design_matrix):
         sep='\t', line_terminator='\t\n',
         mode='a', header=None)
     return str(matrix_path)
+
+
+def flatten(inlist):
+    """Flattens list of lists to list."""
+    flattened_list = [item for sublist in inlist for item in sublist]
+    return flattened_list
