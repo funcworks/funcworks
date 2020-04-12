@@ -1,5 +1,4 @@
 """Run and Session Level Visualization interface."""
-# pylint: disable=E1101, C0115
 from pathlib import Path
 from nipype.interfaces.base import (BaseInterfaceInputSpec,
                                     TraitedSpec, traits, File,
