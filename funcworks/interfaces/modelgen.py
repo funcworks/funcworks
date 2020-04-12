@@ -300,7 +300,7 @@ class GenerateHigherInfo(IOBase):
         for contrast_file, contrast_ents in contrast_zip:
             if contrast_ents['stat'] not in ['effect', 'variance']:
                 continue
-            fields = ['{' + '{}'.format(field) + '}' for field in split_fields]
+            fields = [f'{{{field}}}' for field in split_fields]
             if 'space' not in contrast_ents.keys():
                 contrast_ents['space'] = 'bold'
             org_key = '.'.join(fields).format(**contrast_ents)
