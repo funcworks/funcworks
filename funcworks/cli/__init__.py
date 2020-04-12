@@ -1,1 +1,0 @@
-"""Instantiate funcworks.cli submodule."""
