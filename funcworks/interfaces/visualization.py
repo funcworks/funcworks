@@ -73,7 +73,8 @@ class PlotMatrices(IOBase):
         des_plot = self._plot_matrix(matrix=design_matrix,
                                      path_pattern=image_pattern,
                                      suffix='design',
-                                     cmap='viridis')
+                                     cmap='viridis',
+                                     layout=layout)
         con_plot = self._plot_matrix(matrix=contrast_matrix,
                                      path_pattern=image_pattern,
                                      suffix='contrasts',
@@ -85,7 +86,8 @@ class PlotMatrices(IOBase):
                                            cmap='RdBu_r',
                                            layout=layout)
         ents.update({'suffix': 'design'})
-        design_path = layout.build_path(ents, path_patterns=design_matrix_patt)
+        design_path = layout.build_path(
+            ents, path_patterns=design_matrix_patt, validate=False)
         design_path = output_dir / design_path
         design_path.parent.mkdir(exist_ok=True, parents=True)
         design_matrix.to_csv(design_path, sep='\t', index=None)
@@ -127,7 +129,8 @@ class PlotMatrices(IOBase):
             cbar_kws={'shrink': 0.5, 'ticks': np.linspace(-vmax, vmax, 5)})
         entities = self.inputs.entities
         entities.update({'suffix': suffix})
-        fig_path = layout.build_path(entities, path_patterns=path_pattern)
+        fig_path = layout.build_path(
+            entities, path_patterns=path_pattern, validate=False)
         fig_path = Path(self.inputs.output_dir) / fig_path
         fig_path.parent.mkdir(exist_ok=True, parents=True)
         plt.savefig(fig_path, bbox_inches='tight')
@@ -150,7 +153,8 @@ class PlotMatrices(IOBase):
         plot.vlines([len(regressor_names)], 0, len(regressor_names))
         entities = self.inputs.entities
         entities.update({'suffix': 'corr'})
-        fig_path = layout.build_path(entities, path_patterns=path_pattern)
+        fig_path = layout.build_path(
+            entities, path_patterns=path_pattern, validate=False)
         fig_path = Path(self.inputs.output_dir) / fig_path
         fig_path.parent.mkdir(exist_ok=True, parents=True)
         plt.savefig(fig_path, bbox_inches='tight')
