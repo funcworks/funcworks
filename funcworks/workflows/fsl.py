@@ -202,7 +202,8 @@ def fsl_run_level_wf(model,
 
     plot_matrices = pe.MapNode(
         PlotMatrices(
-            output_dir=output_dir),
+            output_dir=output_dir,
+            database_path=database_path),
         iterfield=['mat_file', 'con_file', 'entities', 'run_info'],
         run_without_submitting=True,
         name=f'plot_{level}_matrices')
