@@ -69,8 +69,7 @@ class PlotMatrices(IOBase):
             regressor_names=regressor_names,
             confound_names=confound_names,
             mat_file=self.inputs.mat_file,
-            con_file=self.inputs.con_file,
-            layout=layout)
+            con_file=self.inputs.con_filet)
         des_plot = self._plot_matrix(matrix=design_matrix,
                                      path_pattern=image_pattern,
                                      suffix='design',
