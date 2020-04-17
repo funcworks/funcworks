@@ -289,7 +289,7 @@ def fsl_run_level_wf(model,
         ])
     else:
         workflow.connect([
-            (get_info, mask_functional, [('brain_mask', 'in_file2')])
+            (get_info, mask_functional, [('brain_mask', 'in_file2')]),
             (realign_runs, mask_functional, [('out_file', 'in_file')]),
             (mask_functional, specify_model,
                 [('out_file', 'functional_runs')]),
