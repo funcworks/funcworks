@@ -38,25 +38,24 @@ def get_parser():
 
     parser.add_argument(
         'bids_dir', action='store', type=Path,
-        help='the root folder of a BIDS valid dataset '
+        help='Root folder of BIDS Dataset being analyzed'
         '(sub-XXXXX folders should be found at the top level in this folder).')
     parser.add_argument(
         'output_dir', action='store', type=Path,
-        help='the output path for the outcomes of preprocessing and visual '
-             'reports')
+        help='Output path for the processed data and visual reports')
     parser.add_argument(
         'analysis_level', choices=['run', 'session', 'participant', 'dataset'],
-        help='processing stage to be runa (see BIDS-Apps specification).')
+        help='Processing stage to be run (see BIDS-Apps specification).')
     parser.add_argument(
         '-m', '--model-file', action='store', type=Path,
-        help='location of BIDS model description')
+        help='Location of BIDS model file')
     parser.add_argument(
         '-d', '--derivatives', action='store', nargs='+',
-        help='location of derivatives containing preprocessed images.')
+        help='Location containing fMRIPrep preprocessed images.')
     parser.add_argument(
         '--participant_label', '--participant-label',
         action='store', nargs='+',
-        help='a space delimited list of participant identifiers or a single '
+        help='Space delimited list of participant identifiers or a single '
         'identifier (the sub- prefix can be removed)')
     parser.add_argument(
         '-s', '--smoothing', action='store', metavar="FWHM[:LEVEL:[TYPE]]",
@@ -72,26 +71,32 @@ def get_parser():
     )
     parser.add_argument(
         '-w', '--work_dir', action='store', type=Path,
-        help='path where intermediate results should be stored')
+        help='Path where intermediate results should be stored.')
     parser.add_argument(
         '--use-rapidart', action='store_true', default=False,
-        help='Use RapidArt artifact detection algorithm')
+        help='Use RapidArt artifact detection algorithm.')
     parser.add_argument(
         '--use-plugin', action='store', default=None,
-        help='nipype plugin configuration file')
+        help='File containing plugin configuration for NiPype.')
     parser.add_argument(
         '--detrend-poly', action='store', default=None, type=int,
-        help='Legendre polynomials to use for temporal filtering')
+        help='Legendre polynomials to use for temporal filtering.')
     parser.add_argument(
         '--align-volumes', action='store',
         default=None, type=int,
         help='Bold reference to align timeseries, '
-        'this will override any run specific inputs '
-        'in the model file for the boldref and brain_mask')
+             'this will override any run specific inputs '
+             'in the model file for the boldref and brain_mask.')
     parser.add_argument(
-        '--database-path', action='store',
+        '--database-path', action='store', default=None,
         help='Path to existing directory containing BIDS '
-             'Database files useful for speeding up run-time')
+             'Database files useful for speeding up run-time.')
+    parser.add_argument(
+        '-sa', '--smooth-autocorrelations', action='store_true',
+        default=False,
+        help='Option to enable smoothing of autocorrelations '
+             'during run level analyses (default: False).'
+    )
     return parser
 
 
@@ -332,7 +337,8 @@ def build_workflow(opts, retval):
         run_uuid=run_uuid,
         use_rapidart=opts.use_rapidart,
         detrend_poly=opts.detrend_poly,
-        align_volumes=opts.align_volumes)
+        align_volumes=opts.align_volumes,
+        smooth_autocorrelations=opts.smooth_autocorrelations)
 
     retval['return_code'] = 0
     # logs_path = Path(output_dir) / 'funcworks' / 'logs'
