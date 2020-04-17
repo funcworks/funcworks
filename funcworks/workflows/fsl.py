@@ -25,6 +25,7 @@ def fsl_run_level_wf(model,
                      use_rapidart=False,
                      detrend_poly=None,
                      align_volumes=None,
+                     smooth_autocorrelations=False,
                      name='fsl_run_level_wf'):
     """Generate run level workflow for a given model."""
     bids_dir = Path(bids_dir)
@@ -99,11 +100,16 @@ def fsl_run_level_wf(model,
 
     estimate_model = pe.MapNode(
         fsl.FILMGLS(
-            mask_size=5, threshold=0.0,  # smooth_autocorr=True
+            threshold=0.0,  # smooth_autocorr=True
             output_type='NIFTI_GZ', results_dir='results',
-            autocorr_noestimate=True),
+            smooth_autocorr=False, autocorr_noestimate=True),
         iterfield=['design_file', 'in_file', 'tcon_file'],
         name=f'model_{level}_estimate')
+
+    if smooth_autocorrelations:
+        first_level_design.inputs.model_serial_correlations = True
+        estimate_model.inputs.smooth_autocorr = True
+        estimate_model.inputs.autocorr_noestimate = False
 
     calculate_p = pe.MapNode(
         fsl.ImageMaths(
@@ -168,6 +174,14 @@ def fsl_run_level_wf(model,
             dimension=dimensionality),
         iterfield=['in_file', 'brightness_threshold', 'usans'],
         name='smooth_susan')
+
+    mask_functional = pe.MapNode(
+        fsl.ImageMaths(
+            suffix='_mask',
+            op_string='-mas'),
+        iterfield=['in_file', 'in_file2'],
+        name='mask_functional')
+
     # Exists solely to correct undesirable behavior of FSL
     # that results in loss of constant columns
     correct_matrices = pe.MapNode(
@@ -255,6 +269,7 @@ def fsl_run_level_wf(model,
         ])
 
     if smoothing_level == 'l1':
+        estimate_model.inputs.mask_size = smoothing_fwhm
         workflow.connect([
             (realign_runs, mean_img, [('out_file', 'in_file')]),
             (realign_runs, median_img, [('out_file', 'in_file')]),
@@ -266,13 +281,19 @@ def fsl_run_level_wf(model,
             (median_img, run_susan, [
                 (('out_stat', utils.get_btthresh), 'brightness_threshold')]),
             (merge, run_susan, [(('out', utils.get_usans), 'usans')]),
-            (run_susan, specify_model, [('smoothed_file', 'functional_runs')]),
-            (run_susan, fit_model, [('smoothed_file', 'functional_data')])
+            (get_info, mask_functional, [('brain_mask', 'in_file2')]),
+            (run_susan, mask_functional, [('smoothed_file', 'in_file')]),
+            (mask_functional, specify_model,
+                [('out_file', 'functional_runs')]),
+            (mask_functional, fit_model, [('out_file', 'functional_data')]),
         ])
     else:
         workflow.connect([
-            (realign_runs, specify_model, [('out_file', 'functional_runs')]),
-            (realign_runs, fit_model, [('out_file', 'functional_data')])
+            (get_info, mask_functional, [('brain_mask', 'in_file2')])
+            (realign_runs, mask_functional, [('out_file', 'in_file')]),
+            (mask_functional, specify_model,
+                [('out_file', 'functional_runs')]),
+            (mask_functional, fit_model, [('out_file', 'functional_data')]),
         ])
 
     workflow.connect([

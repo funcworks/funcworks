@@ -17,7 +17,8 @@ def init_funcworks_wf(model_file,
                       run_uuid,
                       use_rapidart,
                       detrend_poly,
-                      align_volumes):
+                      align_volumes,
+                      smooth_autocorrelations):
     """Initialize funcworks single subject workflow for all subjects."""
     with open(model_file, 'r') as read_mdl:
         model = json.load(read_mdl)
@@ -33,7 +34,7 @@ def init_funcworks_wf(model_file,
         elif len(smoothing_params) == 2:
             smoothing_params.append('iso')
         smoothing_fwhm, smoothing_level, smoothing_type = smoothing_params
-        smoothing_fwhm = float(smoothing_fwhm)
+        smoothing_fwhm = int(smoothing_fwhm)
 
         if smoothing_level.lower().startswith("l"):
             if int(smoothing_level[1:]) > len(model['Steps']):
@@ -58,6 +59,7 @@ def init_funcworks_wf(model_file,
             use_rapidart=use_rapidart,
             detrend_poly=detrend_poly,
             align_volumes=align_volumes,
+            smooth_autocorrelations=smooth_autocorrelations,
             name=f'single_subject_{subject_id}_wf')
         crash_dir = (Path(output_dir) / 'funcworks'
                      / 'logs' / model['Name']
@@ -87,6 +89,7 @@ def init_funcworks_subject_wf(model,
                               use_rapidart,
                               detrend_poly,
                               align_volumes,
+                              smooth_autocorrelations,
                               name):
     """Produce single subject workflow for a subject given a model spec."""
     workflow = Workflow(name=name)
@@ -109,6 +112,7 @@ def init_funcworks_subject_wf(model,
                 use_rapidart=use_rapidart,
                 detrend_poly=detrend_poly,
                 align_volumes=align_volumes,
+                smooth_autocorrelations=smooth_autocorrelations,
                 name=f'fsl_run_level_wf')
             workflow.add_nodes([model])
         else:
