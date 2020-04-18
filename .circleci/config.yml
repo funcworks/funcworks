@@ -250,4 +250,4 @@ workflows:
             - cache_test_data
   style_check:
     jobs:
-      -style_check
+      - style_check
