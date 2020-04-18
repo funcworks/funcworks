@@ -1,7 +1,6 @@
 ./work*
 ./out*
 data
-.gitignore
 *.rst
 *.md
 *.egg-info/
