@@ -138,14 +138,10 @@ jobs:
               - ds003-v0-master-
               - ds003-v0-
         - run:
-            name: Update pyenv
-            command: |
-                pyenv update
-        - run:
             name: Install coverage and codecov
             command: |
-                pyenv install 3.8.0
-                pyenv local 3.8.0
+                pyenv install 3.6.3
+                pyenv local 3.6.3
                 python -m pip install -U "coverage<5" codecov
         - run:
             name: Load Docker image layer cache
