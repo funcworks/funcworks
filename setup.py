@@ -2,7 +2,7 @@ from setuptools import setup
 
 if __name__ == '__main__':
     import versioneer
-    from funcworks import __version__, DOWNLOAD_URL
+    from funcworks.__about__ import __version__, DOWNLOAD_URL
 
     cmdclass = versioneer.get_cmdclass()
 
