@@ -232,7 +232,6 @@ workflows:
   version: 2.1
   build_test:
     jobs:
-      - style_check
       - build:
           filters:
             branches:
@@ -249,3 +248,6 @@ workflows:
           requires:
             - build
             - cache_test_data
+  style_check:
+    jobs:
+      -style_check
