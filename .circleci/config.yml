@@ -232,3 +232,6 @@ workflows:
       - style_check
       - cache_test_data
       - test_ds003
+          requires:
+            - build
+            - cache_test_data
