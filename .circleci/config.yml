@@ -30,17 +30,13 @@ jobs:
     working_directory: /tmp/src/funcworks
     steps:
       - run:
-          name: Cleaning working Directory
-          command: |
-            rm -rf /tmp/src/funcworks/*
-      - run:
           name: Install parallel gzip and Python 3
           command: |
             apk add --no-cache pigz python3>3.8.0
       - run:
-          name: Check working_directory
+          name: Cleaning working Directory
           command: |
-            ls -lR /tmp/src/funcworks
+            rm -rf /tmp/src/funcworks/*
       - checkout
       - setup_remote_docker
       - run:
