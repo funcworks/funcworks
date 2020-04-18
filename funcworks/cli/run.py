@@ -100,7 +100,7 @@ def get_parser():
     )
     parser.add_argument(
         '--version',
-        desc='version',
+        action='version',
         version=__version__)
     return parser
 
