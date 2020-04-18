@@ -41,6 +41,11 @@ def fsl_run_level_wf(model,
     workflow.__desc__ = ""
     (work_dir / model['Name']).mkdir(exist_ok=True)
 
+    include_entities = {}
+    if 'Input' in model:
+        if 'Include' in model['Input']:
+            include_entities = model['Input']['Include']
+
     getter = pe.Node(
         BIDSDataGrabber(
             subject=subject_id,
@@ -49,7 +54,7 @@ def fsl_run_level_wf(model,
                 'bold_files': {
                     **{'datatype': 'func', 'desc': 'preproc',
                        'extension': 'nii.gz', 'suffix': 'bold'},
-                    **model['Input']['Include']}}),
+                    **include_entities}}),
         name='func_select')
 
     get_info = pe.MapNode(
