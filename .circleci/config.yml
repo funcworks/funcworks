@@ -140,7 +140,7 @@ jobs:
         - run:
             name: Update pyenv
             command: |
-                pip install --upgrade pyenv
+                pyenv update
         - run:
             name: Install coverage and codecov
             command: |
