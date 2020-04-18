@@ -69,7 +69,7 @@ jobs:
                            | tail -n 1 | sed -e 's/.*fit/fit/' -e 's/[\r\n]//g')
             echo "$THISVERSION"
             echo "$DOCKERVERSION"
-            test "$DOCKERVERSION" = "funcworks v$THISVERSION".dirty
+            test "$DOCKERVERSION" = "funcworks v$THISVERSION"
       - run:
           name: Docker save
           no_output_timeout: 40m
