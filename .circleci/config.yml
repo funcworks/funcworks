@@ -59,7 +59,7 @@ jobs:
               --build-arg VERSION="${CIRCLE_TAG:-$THISVERSION}" .
       - run:
           name: Verify executable can be run
-          command: docker run --rm akimbler/funcworks:latest --help
+          command: docker run --rm adamkimbler/funcworks:latest --help
       - run:
           name: Check version
           command: |
