@@ -228,6 +228,7 @@ workflows:
   version: 2.1
   build_test:
     jobs:
+      - build
       - style_check
       - cache_test_data
       - test_ds003
