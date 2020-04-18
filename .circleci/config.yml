@@ -228,7 +228,12 @@ workflows:
   version: 2.1
   build_test:
     jobs:
-      - build
+      - build:
+          filters:
+            branches:
+              ignore: /doc\/.*/
+            tags:
+              only: /.*/
       - cache_test_data
       - test_ds003:
           requires:
