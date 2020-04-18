@@ -2,6 +2,7 @@
 ==================================================================
 
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/akimbler/funcworks)
+![Docker Cloud Automated build](https://img.shields.io/docker/cloud/automated/adamkimbler/funcworks)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![CircleCI](https://circleci.com/gh/akimbler/funcworks.svg?style=shield)](https://circleci.com/gh/kimbler/funcworks/tree/master)
 
