@@ -10,6 +10,7 @@ from pathlib import Path
 from tempfile import mkdtemp
 from time import strftime
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+from .. import __version__
 
 logging.addLevelName(25, 'IMPORTANT')  # New level between INFO and WARNING
 logging.addLevelName(15, 'VERBOSE')  # New level between INFO and DEBUG
@@ -97,6 +98,10 @@ def get_parser():
         help='Option to enable smoothing of autocorrelations '
              'during run level analyses (default: False).'
     )
+    parser.add_argument(
+        '--version',
+        action='version',
+        version=__version__)
     return parser
 
 
