@@ -124,7 +124,7 @@ RUN echo "Downloading Miniconda installer ..." \
 COPY ./ /src/funcworks/
 USER root
 RUN chmod 755 -R /src/
-RUN conda create -y -q --name neuro python=3.8 \
+RUN conda create -y -q --name neuro python=3.6 \
     && sync && conda clean --all && sync \
     && /bin/bash -c "source activate neuro \
       && pip install --no-cache-dir /src/funcworks[all]"\
