@@ -119,7 +119,7 @@ jobs:
             - /tmp/data
 
   test_ds003:
-      machine:
+      docker:
         - image: circleci/python@3.8.2
       working_directory: /tmp/src/funcworks
       steps:
