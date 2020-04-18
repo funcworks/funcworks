@@ -1,0 +1,11 @@
+./work*
+./out*
+data
+.git
+.gitignore
+*.rst
+*.md
+*.egg-info/
+.circleci/
+docs/
+examples/
