@@ -166,6 +166,10 @@ class _BIDSDataGrabberInputSpec(DynamicTraitedSpec):
         desc="Generate exception if list is empty for a given field")
 
 
+class _BIDSDataGrabberOutputSpec(DynamicTraitedSpec):
+    functional_files = OutputMultiPath()
+
+
 class BIDSDataGrabber(LibraryBaseInterface, IOBase):
     """
     Module that allows arbitrary query of BIDS Datasets.
@@ -191,7 +195,7 @@ class BIDSDataGrabber(LibraryBaseInterface, IOBase):
     """
 
     input_spec = _BIDSDataGrabberInputSpec
-    output_spec = DynamicTraitedSpec
+    output_spec = _BIDSDataGrabberOutputSpec
     _always_run = False
     _pkg = "bids"
 
@@ -258,10 +262,8 @@ class BIDSDataGrabber(LibraryBaseInterface, IOBase):
                 filelist = Undefined
 
             outputs[key] = filelist
-        return outputs
 
-    def _add_output_traits(self, base):
-        return add_traits(base, list(self.inputs.output_query.keys()))
+        return outputs['bold_files']
 
 
 def add_traits(base, names, trait_type=None):
