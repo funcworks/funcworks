@@ -19,7 +19,7 @@ def fsl_run_level_wf(model,
                      work_dir,
                      subject_id,
                      database_path,
-                     smoothing_fwhm=4.0,
+                     smoothing_fwhm=None,
                      smoothing_level=None,
                      smoothing_type=None,
                      use_rapidart=False,
@@ -174,9 +174,7 @@ def fsl_run_level_wf(model,
 
     run_susan = pe.MapNode(
         fsl.SUSAN(
-            output_type='NIFTI_GZ',
-            fwhm=smoothing_fwhm,
-            dimension=dimensionality),
+            output_type='NIFTI_GZ'),
         iterfield=['in_file', 'brightness_threshold', 'usans'],
         name='smooth_susan')
 
@@ -274,6 +272,8 @@ def fsl_run_level_wf(model,
         ])
 
     if smoothing_level == 'l1':
+        run_susan.inputs.fwhm = smoothing_fwhm
+        run_susan.inputs.dimension = dimensionality
         estimate_model.inputs.mask_size = smoothing_fwhm
         workflow.connect([
             (realign_runs, mean_img, [('out_file', 'in_file')]),
