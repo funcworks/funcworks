@@ -167,7 +167,7 @@ class _BIDSDataGrabberInputSpec(DynamicTraitedSpec):
 
 
 class _BIDSDataGrabberOutputSpec(DynamicTraitedSpec):
-    functional_files = OutputMultiPath()
+    bold_files = OutputMultiPath()
 
 
 class BIDSDataGrabber(LibraryBaseInterface, IOBase):
