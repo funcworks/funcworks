@@ -33,9 +33,9 @@ def fsl_run_level_wf(model,
     workflow = pe.Workflow(name=name)
 
     level = step['Level']
-    if smoothing_type == 'iso':
-        dimensionality = 3
-    elif smoothing_type == 'inp':
+
+    dimensionality = 3  # Nipype FSL.SUSAN Default
+    if smoothing_type == 'inp':
         dimensionality = 2
 
     workflow.__desc__ = ""
