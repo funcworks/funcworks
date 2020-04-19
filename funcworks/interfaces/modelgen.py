@@ -12,7 +12,7 @@ from ..utils import snake_to_camel
 
 class _GetRunModelInfoInputSpec(BaseInterfaceInputSpec):
     bids_dir = Directory(exists=True, mandatory=True)
-    functional_file = File(exists=True, mandatory=True)
+    functional_file = InputMultiPath()
     database_path = Directory(exists=True, mandatory=True)
     model = traits.Dict(mandatory=True)
     detrend_poly = traits.Any(
