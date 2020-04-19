@@ -66,7 +66,7 @@ jobs:
             THISVERSION=$( python3 -c 'import funcworks; print(funcworks.__version__)' )
             THISVERSION="${CIRCLE_TAG:-$THISVERSION}"
             DOCKERVERSION=$(docker run --rm adamkimbler/funcworks:latest --version \
-                           | tail -n 1 | sed 's/.*[\r\n]//g' -e 's/.dirty//g')
+                           | tail -n 1 | sed -e 's/.*[\r\n]//g' -e 's/.dirty//g')
             echo "$THISVERSION"
             echo "$DOCKERVERSION"
             test "$DOCKERVERSION" = "$THISVERSION"
