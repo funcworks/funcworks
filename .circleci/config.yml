@@ -157,7 +157,7 @@ jobs:
         - run:
             name: Check outputs
             command: |
-              python -c "import pathlib; print(pathlib.Path('/tmp/data/ds003_fmriprep/sub-03/func/sub-03_task-rhymejudgment_space-MNI152NLin6Asym_desc-preproc_bold.nii.gz').is_file())"
+              python -c "import pathlib; print(list(pathlib.Path('/tmp/data/ds003_fmriprep/').rglob('**/*.*')))"
         - run:
             name: Run Funcworks
             no_output_timeout: 2h
