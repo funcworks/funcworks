@@ -69,7 +69,7 @@ jobs:
                            | tail -n 1 | sed 's/.*[\r\n]//g' -e 's/.dirty//g')
             echo "$THISVERSION"
             echo "$DOCKERVERSION"
-            # test "$DOCKERVERSION" = "$THISVERSION"
+            test "$DOCKERVERSION" = "$THISVERSION"
       - run:
           name: Docker save
           no_output_timeout: 40m
