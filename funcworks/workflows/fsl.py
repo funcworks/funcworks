@@ -71,6 +71,11 @@ def fsl_run_level_wf(model,
         iterfield=['in_file', 'ref_file'],
         name='func_realign')
 
+    wrangle_volumes = pe.MapNode(
+        IdentityInterface(fields=['functional_file']),
+        name='wrangle_volumes'
+    )
+
     specify_model = pe.MapNode(
         modelgen.SpecifyModel(
             high_pass_filter_cutoff=-1.0,
@@ -239,25 +244,33 @@ def fsl_run_level_wf(model,
         name=f'wrangle_{level}_outputs')
 
     # Setup connections among nodes
-    workflow.connect([
-        (getter, realign_runs, [('bold_files', 'in_file')]),
-        (getter, get_info, [('bold_files', 'functional_file')]),
-        (get_info, realign_runs, [('reference_image', 'ref_file')]),
-    ])
+    if align_volumes:
+        workflow.connect([
+            (getter, realign_runs, [('bold_files', 'in_file')]),
+            (getter, get_info, [('bold_files', 'functional_file')]),
+            (get_info, realign_runs, [('reference_image', 'ref_file')]),
+            (realign_runs, wrangle_volumes, [('out_file', 'functional_file')])
+        ])
+    else:
+        workflow.connect([
+            (getter, wrangle_volumes, [('bold_files', 'functional_file')]),
+            (getter, get_info, [('bold_files', 'functional_file')]),
+        ])
 
     if use_rapidart:
         workflow.connect([
             (get_info, run_rapidart, [
                 ('motion_parameters', 'realignment_parameters')]),
             (get_info, run_rapidart, [('brain_mask', 'mask_file')]),
-            (realign_runs, run_rapidart, [('out_file', 'realigned_files')]),
+            (wrangle_volumes, run_rapidart, [
+                ('functional_file', 'realigned_files')]),
             (run_rapidart, reshape_rapidart, [
                 ('outlier_files', 'outlier_file')]),
             (get_info, reshape_rapidart, [
                 ('run_info', 'run_info'),
                 ('contrast_entities', 'contrast_entities')]),
-            (realign_runs, reshape_rapidart, [
-                ('out_file', 'functional_file')]),
+            (wrangle_volumes, reshape_rapidart, [
+                ('functional_file', 'functional_file')]),
             (reshape_rapidart, specify_model, [('run_info', 'subject_info')]),
             (reshape_rapidart, plot_matrices, [('run_info', 'run_info')]),
             (reshape_rapidart, collate, [
@@ -276,13 +289,13 @@ def fsl_run_level_wf(model,
         run_susan.inputs.dimension = dimensionality
         estimate_model.inputs.mask_size = smoothing_fwhm
         workflow.connect([
-            (realign_runs, mean_img, [('out_file', 'in_file')]),
-            (realign_runs, median_img, [('out_file', 'in_file')]),
+            (wrangle_volumes, mean_img, [('functional_file', 'in_file')]),
+            (wrangle_volumes, median_img, [('functional_file', 'in_file')]),
             (get_info, mean_img, [('brain_mask', 'mask_file')]),
             (get_info, median_img, [('brain_mask', 'mask_file')]),
             (mean_img, merge, [('out_file', 'in1')]),
             (median_img, merge, [('out_stat', 'in2')]),
-            (realign_runs, run_susan, [('out_file', 'in_file')]),
+            (wrangle_volumes, run_susan, [('functional_file', 'in_file')]),
             (median_img, run_susan, [
                 (('out_stat', utils.get_btthresh), 'brightness_threshold')]),
             (merge, run_susan, [(('out', utils.get_usans), 'usans')]),
@@ -295,7 +308,7 @@ def fsl_run_level_wf(model,
     else:
         workflow.connect([
             (get_info, mask_functional, [('brain_mask', 'in_file2')]),
-            (realign_runs, mask_functional, [('out_file', 'in_file')]),
+            (wrangle_volumes, mask_functional, [('out_file', 'in_file')]),
             (mask_functional, specify_model,
                 [('out_file', 'functional_runs')]),
             (mask_functional, fit_model, [('out_file', 'functional_data')]),
