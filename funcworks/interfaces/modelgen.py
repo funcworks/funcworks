@@ -110,7 +110,7 @@ class GetRunModelInfo(IOBase):
             **{**entities, 'desc': None, 'space': None,
                'suffix': 'events', 'extension': 'tsv'})[0].path
 
-        if 'run' not in entities and self.inputs.align_volumes:
+        if self.inputs.align_volumes and 'run' not in entities:
             raise ValueError(
                 'align volumes is set, but dataset '
                 'does not appear to have multiple runs')

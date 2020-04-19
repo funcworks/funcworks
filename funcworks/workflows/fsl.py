@@ -71,9 +71,8 @@ def fsl_run_level_wf(model,
         iterfield=['in_file', 'ref_file'],
         name='func_realign')
 
-    wrangle_volumes = pe.MapNode(
+    wrangle_volumes = pe.Node(
         IdentityInterface(fields=['functional_file']),
-        iterfield=['functional_file'],
         name='wrangle_volumes'
     )
 

@@ -84,10 +84,11 @@ def get_parser():
         help='Legendre polynomials to use for temporal filtering.')
     parser.add_argument(
         '--align-volumes', action='store',
-        default=1, type=int,
+        default=None, type=int,
         help='Bold reference to align timeseries, '
-             'this will override any run specific inputs '
-             'in the model file for the boldref and brain_mask.')
+             'this will override any run specific entities '
+             'or specifications in the model file '
+             'for the boldref and brain_mask.')
     parser.add_argument(
         '--database-path', action='store', default=None,
         help='Path to existing directory containing BIDS '
@@ -139,7 +140,7 @@ def main():
         # output_dir = retval.get('output_dir')
         # work_dir = retval.get('work_dir')
         # subject_list = retval.get('participant_label', None)
-        # run_uuid = retval.get('run_uuid', None)
+        # runtime_uuid = retval.get('runtime_uuid', None)
         plugin_settings = retval.get('plugin_settings')
         funcworks_wf = retval.get('workflow', None)
 
@@ -166,7 +167,7 @@ def main():
         #     from ..utils.sentry import process_crashfile
         #     crashfolders = [
         #         output_dir / 'funcworks' / 'sub-{}'.format(s) /
-        #         'log' / run_uuid for s in subject_list]
+        #         'log' / runtime_uuid for s in subject_list]
         #    for crashfolder in crashfolders:
         #         for crashfile in crashfolder.glob('crash*.*'):
         #             process_crashfile(crashfile)
@@ -233,8 +234,8 @@ def build_workflow(opts, retval):
         return retval
 
     # Set up some instrumental utilities
-    run_uuid = '%s_%s' % (strftime('%Y%m%d-%H%M%S'), uuid.uuid4())
-    retval['run_uuid'] = run_uuid
+    runtime_uuid = '%s_%s' % (strftime('%Y%m%d-%H%M%S'), uuid.uuid4())
+    retval['runtime_uuid'] = runtime_uuid
 
     if opts.participant_label:
         retval['participant_label'] = opts.participant_label
@@ -306,11 +307,11 @@ def build_workflow(opts, retval):
     # if opts.reports_only:
     #     build_log.log(25, 'Running --reports-only on participants %s',
     #                   ', '.join(opts.participant_label))
-    #     if opts.run_uuid is not None:
-    #         run_uuid = opts.run_uuid
-    #         retval['run_uuid'] = run_uuid
+    #     if opts.runtime_uuid is not None:
+    #         runtime_uuid = opts.runtime_uuid
+    #         retval['runtime_uuid'] = runtime_uuid
     #     retval['return_code'] = generate_reports(
-    #         opts.participant_label, output_dir, work_dir, run_uuid,
+    #         opts.participant_label, output_dir, work_dir, runtime_uuid,
     #         packagename='funcworks')
     #     return retval
 
@@ -320,7 +321,7 @@ def build_workflow(opts, retval):
         Running FUNCWORKS version {__version__}:
           * BIDS dataset path: {bids_dir}.
           * Participant list: {retval['participant_label']}.
-          * Run identifier: {run_uuid}.
+          * Run identifier: {runtime_uuid}.
         """))
 
     if not opts.model_file:
@@ -339,7 +340,7 @@ def build_workflow(opts, retval):
         participants=retval['participant_label'],
         analysis_level=opts.analysis_level,
         smoothing=opts.smoothing,
-        run_uuid=run_uuid,
+        runtime_uuid=runtime_uuid,
         use_rapidart=opts.use_rapidart,
         detrend_poly=opts.detrend_poly,
         align_volumes=opts.align_volumes,
