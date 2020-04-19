@@ -84,7 +84,7 @@ def get_parser():
         help='Legendre polynomials to use for temporal filtering.')
     parser.add_argument(
         '--align-volumes', action='store',
-        default=None, type=int,
+        default=1, type=int,
         help='Bold reference to align timeseries, '
              'this will override any run specific inputs '
              'in the model file for the boldref and brain_mask.')
