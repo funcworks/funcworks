@@ -259,7 +259,8 @@ class _GenerateHigherInfoInputSpec(BaseInterfaceInputSpec):
         desc='Contrast entities inherited from previous levels')
     model = traits.Dict(desc='Step level information from the model file')
     database_path = Directory(mandatory=True, exists=True)
-    align_volumes = traits.Int(
+    align_volumes = traits.Any(
+        default=None,
         desc=('Target volume for functional realignment',
               'if not value is specified, will not functional file'))
 
