@@ -111,7 +111,7 @@ jobs:
             datalad get ds003_fmriprep/sub-0{1,2,3}/func/*_space-MNI152NLin2009cAsym_desc-*.nii.gz \
                         ds003_fmriprep/sub-0{1,2,3}/func/*_desc-confounds_*.tsv \
                         ds003_fmriprep/dataset_description.json \
-                        ds003_fmriprep/sub-*/*/*.json
+                        ds003_fmriprep/sub-0{1,2,3}/*/*.json
       - run:
           name: Download a model for ds000003
           command: |
@@ -154,6 +154,10 @@ jobs:
                 pigz -d --stdout /tmp/cache/docker.tar.gz | docker load
                 docker images
               fi
+        - run:
+            name: Check outputs
+            command: |
+              python -c "import pathlib; print(pathlib.Path('/data/sub-03/func/sub-03_task-rhymejudgment_space-MNI152NLin6Asym_desc-preproc_bold.nii.gz').is_file())"
         - run:
             name: Run Funcworks
             no_output_timeout: 2h
