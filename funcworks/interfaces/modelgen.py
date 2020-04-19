@@ -43,7 +43,9 @@ class _GetRunModelInfoOutputSpec(TraitedSpec):
     reference_image = File(
         exists=True,
         desc='Reference Image for functional realignment')
-    brain_mask = File(exists=True, desc='Brain mask for functional image')
+    brain_mask = traits.Either(
+        File, traits.Str,
+        desc='Brain mask for functional image')
 
 
 class GetRunModelInfo(IOBase):
