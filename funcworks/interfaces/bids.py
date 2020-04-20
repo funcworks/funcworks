@@ -8,8 +8,8 @@ from nipype import logging
 from nipype.utils.filemanip import copyfile
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec, TraitedSpec,
-    InputMultiPath, OutputMultiPath, File, Directory, Str, Undefined,
-    traits, isdefined, LibraryBaseInterface, DynamicTraitedSpec)
+    InputMultiPath, OutputMultiPath, File, Directory, Str,
+    traits, isdefined, SimpleInterface)
 from nipype.interfaces.io import IOBase
 import nibabel as nb
 from ..utils import snake_to_camel
@@ -154,130 +154,44 @@ def _copy_or_convert(in_file, out_file):
     raise RuntimeError(f"Cannot convert {in_ext} to {out_ext}")
 
 
-class _BIDSDataGrabberInputSpec(DynamicTraitedSpec):
+class _BIDSGetInputSpec(BaseInterfaceInputSpec):
     database_path = Directory(
         exists=True, mandatory=True, desc="Path to BIDS Dataset DBCACHE")
-    output_query = traits.Dict(
+    fixed_entities = traits.Dict(
         key_trait=Str,
         value_trait=traits.Dict, desc="Queries for outfield outputs")
-    raise_on_empty = traits.Bool(
-        True,
-        usedefault=True,
-        desc="Generate exception if list is empty for a given field")
 
 
-class BIDSDataGrabber(LibraryBaseInterface, IOBase):
+class _BIDSGetOutputSpec(TraitedSpec):
+    functional_files = OutputMultiPath(File)
+    # mask_files = OutputMultiPath(File)
+    # reference_files = OutputMultiPath(File)
+
+
+class BIDSGet(SimpleInterface):
     """
-    Module that allows arbitrary query of BIDS Datasets.
+    Module that allows querys for functional files and associated masks/refs.
 
     Examples
     --------
-    By default, the BIDSDataGrabber fetches anatomical and functional images
-    from a project, and makes BIDS entities (e.g. subject) available for
-    filtering outputs.
-    >>> bg = BIDSDataGrabber()
-    >>> bg.inputs.base_dir = 'ds005/'
-    >>> bg.inputs.subject = '01'
-    >>> results = bg.run() # doctest: +SKIP
-    Dynamically created, user-defined output fields can also be defined to
-    return different types of outputs from the same project. All outputs
-    are filtered on common entities, which can be explicitly defined as
-    infields.
-    >>> bg = BIDSDataGrabber(infields = ['subject'])
-    >>> bg.inputs.base_dir = 'ds005/'
-    >>> bg.inputs.subject = '01'
-    >>> bg.inputs.output_query['dwi'] = dict(datatype='dwi')
-    >>> results = bg.run() # doctest: +SKIP
     """
 
-    input_spec = _BIDSDataGrabberInputSpec
-    output_spec = DynamicTraitedSpec
+    input_spec = _BIDSGetInputSpec
+    output_spec = _BIDSGetOutputSpec
     _always_run = False
     _pkg = "bids"
 
-    def __init__(self, infields=None, **kwargs):
-        """See help(BIDSDataGrabber) for more info."""
-        super(BIDSDataGrabber, self).__init__(**kwargs)
-
-        if not isdefined(self.inputs.output_query):
-            self.inputs.output_query = {
-                "bold": {
-                    "datatype": "func",
-                    "suffix": "bold",
-                    "extensions": ["nii", ".nii.gz"],
-                },
-                "T1w": {
-                    "datatype": "anat",
-                    "suffix": "T1w",
-                    "extensions": ["nii", ".nii.gz"],
-                },
-            }
-
-        # If infields is empty, use all BIDS entities
-        if infields is None:
-            from bids import layout as bidslayout
-
-            bids_config = (
-                Path(bidslayout.__file__).parent
-                / "config" / "bids.json")
-            bids_config = json.load(open(bids_config, "r"))
-            infields = [i["name"] for i in bids_config["entities"]]
-
-        self._infields = infields or []
-
-        # used for mandatory inputs check
-        undefined_traits = {}
-        for key in self._infields:
-            self.inputs.add_trait(key, traits.Any)
-            undefined_traits[key] = kwargs[key] if key in kwargs else Undefined
-
-        self.inputs.trait_set(trait_change_notify=False, **undefined_traits)
-
-    def _list_outputs(self):
+    def _run_interface(self, runtime):
         from bids import BIDSLayout
-
-        layout = BIDSLayout.load(self.inputs.database_path)
-
-        # If infield is not given nm input value, silently ignore
-        filters = {}
-        for key in self._infields:
-            value = getattr(self.inputs, key)
-            if isdefined(value):
-                filters[key] = value
-
-        outputs = {}
-        for key, query in self.inputs.output_query.items():
-            args = query.copy()
-            args.update(filters)
-            filelist = layout.get(return_type="file", **args)
-            if len(filelist) == 0:
-                msg = "Output key: %s returned no files" % key
-                if self.inputs.raise_on_empty:
-                    raise IOError(msg)
-                iflogger.warning(msg)
-                filelist = Undefined
-
-            outputs[key] = filelist
-        return outputs
-
-    def _add_output_traits(self, base):
-        return add_traits(base, list(self.inputs.output_query.keys()))
-
-
-def add_traits(base, names, trait_type=None):
-    """
-    Add traits to a traited class.
-
-    All traits are set to Undefined by default
-    """
-    if trait_type is None:
-        trait_type = traits.Any
-    undefined_traits = {}
-    for key in names:
-        base.add_trait(key, trait_type)
-        undefined_traits[key] = Undefined
-    base.trait_set(trait_change_notify=False, **undefined_traits)
-    # access each trait
-    for key in names:
-        _ = getattr(base, key)
-    return base
+        layout = BIDSLayout.load(database_path=self.inputs.database_path)
+        fixed_entities = self.inputs.fixed_entities
+        functional_entities = {
+            'datatype': 'func', 'desc': 'preproc',
+            'extension': 'nii.gz', 'suffix': 'bold',
+            'subject': fixed_entities['subject']}
+        functional_files = layout.get(**functional_entities)
+        if len(functional_files) == 0:
+            raise FileNotFoundError(
+                f'Unable to find functional image with '
+                f'specified entities {functional_entities}')
+        self._results['functional_files'] = functional_files
