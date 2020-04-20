@@ -14,7 +14,7 @@ def init_funcworks_wf(model_file,
                       participants,
                       analysis_level,
                       smoothing,
-                      run_uuid,
+                      runtime_uuid,
                       use_rapidart,
                       detrend_poly,
                       align_volumes,
@@ -63,7 +63,7 @@ def init_funcworks_wf(model_file,
             name=f'single_subject_{subject_id}_wf')
         crash_dir = (Path(output_dir) / 'funcworks'
                      / 'logs' / model['Name']
-                     / f'sub-{subject_id}' / run_uuid)
+                     / f'sub-{subject_id}' / runtime_uuid)
         crash_dir.mkdir(exist_ok=True, parents=True)
 
         single_subject_wf.config['execution']['crashdump_dir'] = str(crash_dir)

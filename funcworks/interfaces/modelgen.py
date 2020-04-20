@@ -12,7 +12,7 @@ from ..utils import snake_to_camel
 
 class _GetRunModelInfoInputSpec(BaseInterfaceInputSpec):
     bids_dir = Directory(exists=True, mandatory=True)
-    functional_file = File(exists=True, mandatory=True)
+    functional_file = traits.Either(File, traits.Str)
     database_path = Directory(exists=True, mandatory=True)
     model = traits.Dict(mandatory=True)
     detrend_poly = traits.Any(
@@ -40,10 +40,12 @@ class _GetRunModelInfoOutputSpec(TraitedSpec):
     repetition_time = traits.Float(desc='Repetition Time for the dataset')
     contrast_names = traits.List(
         desc='List of Contrast Names to pass to higher levels')
-    reference_image = File(
-        exists=True,
+    reference_image = traits.Either(
+        File, traits.Str,
         desc='Reference Image for functional realignment')
-    brain_mask = File(exists=True, desc='Brain mask for functional image')
+    brain_mask = traits.Either(
+        File, traits.Str,
+        desc='Brain mask for functional image')
 
 
 class GetRunModelInfo(IOBase):
@@ -109,16 +111,32 @@ class GetRunModelInfo(IOBase):
         events_file = layout.get(
             **{**entities, 'desc': None, 'space': None,
                'suffix': 'events', 'extension': 'tsv'})[0].path
-        align_vols = {}
-        if self.inputs.align_volumes:
-            align_vols = {'run': self.inputs.align_volumes}
-        reference_image = layout.get(
-            **{**entities, **align_vols,
-               'suffix': 'boldref',
-               'desc': None})[0].path
-        mask_image = layout.get(
-            **{**entities, **align_vols,
-               'desc': 'brain', 'suffix': 'mask'})[0].path
+
+        if self.inputs.align_volumes and 'run' not in entities:
+            raise ValueError(
+                'align volumes is set, but dataset '
+                'does not appear to have multiple runs')
+        elif self.inputs.align_volumes:
+            reference_entities = {
+                **entities,
+                'run': self.inputs.align_volumes,
+                'suffix': 'boldref',
+                'desc': None}
+            mask_entities = {
+                **entities,
+                'run': self.inputs.align_volumes,
+                'desc': 'brain', 'suffix': 'mask'}
+        else:
+            reference_entities = {
+                **entities,
+                'suffix': 'boldref',
+                'desc': None}
+            mask_entities = {
+                **entities,
+                'desc': 'brain', 'suffix': 'mask'}
+
+        reference_image = layout.get(**reference_entities)[0].path
+        mask_image = layout.get(**mask_entities)[0].path
         return (regressor_file, meta_file, events_file,
                 reference_image, mask_image, entities)
 
@@ -243,7 +261,8 @@ class _GenerateHigherInfoInputSpec(BaseInterfaceInputSpec):
         desc='Contrast entities inherited from previous levels')
     model = traits.Dict(desc='Step level information from the model file')
     database_path = Directory(mandatory=True, exists=True)
-    align_volumes = traits.Int(
+    align_volumes = traits.Any(
+        default=None,
         desc=('Target volume for functional realignment',
               'if not value is specified, will not functional file'))
 
@@ -342,13 +361,19 @@ class GenerateHigherInfo(IOBase):
             if 'effect' in org:
                 dof_data = np.ones_like(merged_image.get_fdata())
                 dofs = metadata.pop('DegreesOfFreedom')
-                if self.inputs.align_volumes:
+
+                if self.inputs.align_volumes and 'run' not in metadata:
+                    raise ValueError(
+                        'align_volumes is specified, but dataset '
+                        'does not appear to contain multiple runs')
+                elif self.inputs.align_volumes:
                     align_volume = self.inputs.align_volumes
+                    mask_entities = {**metadata, 'desc': 'brain',
+                                     'suffix': 'mask', 'run': align_volume}
                 else:
-                    align_volume = 1
-                mask_path = layout.get(
-                    **{**metadata, 'desc': 'brain',
-                       'suffix': 'mask', 'run': align_volume})
+                    mask_entities = {**metadata, 'desc': 'brain',
+                                     'suffix': 'mask'}
+                mask_path = layout.get(**mask_entities)
                 if len(mask_path) > 1:
                     raise ValueError('Entities given produced '
                                      'more than one mask file')

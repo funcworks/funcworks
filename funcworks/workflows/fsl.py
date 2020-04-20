@@ -71,6 +71,12 @@ def fsl_run_level_wf(model,
         iterfield=['in_file', 'ref_file'],
         name='func_realign')
 
+    wrangle_volumes = pe.MapNode(
+        IdentityInterface(fields=['functional_file']),
+        iterfield=['functional_file'],
+        name='wrangle_volumes'
+    )
+
     specify_model = pe.MapNode(
         modelgen.SpecifyModel(
             high_pass_filter_cutoff=-1.0,
@@ -239,25 +245,33 @@ def fsl_run_level_wf(model,
         name=f'wrangle_{level}_outputs')
 
     # Setup connections among nodes
-    workflow.connect([
-        (getter, realign_runs, [('bold_files', 'in_file')]),
-        (getter, get_info, [('bold_files', 'functional_file')]),
-        (get_info, realign_runs, [('reference_image', 'ref_file')]),
-    ])
+    if align_volumes:
+        workflow.connect([
+            (getter, realign_runs, [('bold_files', 'in_file')]),
+            (getter, get_info, [('bold_files', 'functional_file')]),
+            (get_info, realign_runs, [('reference_image', 'ref_file')]),
+            (realign_runs, wrangle_volumes, [('out_file', 'functional_file')])
+        ])
+    else:
+        workflow.connect([
+            (getter, wrangle_volumes, [('bold_files', 'functional_file')]),
+            (getter, get_info, [('bold_files', 'functional_file')]),
+        ])
 
     if use_rapidart:
         workflow.connect([
             (get_info, run_rapidart, [
                 ('motion_parameters', 'realignment_parameters')]),
             (get_info, run_rapidart, [('brain_mask', 'mask_file')]),
-            (realign_runs, run_rapidart, [('out_file', 'realigned_files')]),
+            (wrangle_volumes, run_rapidart, [
+                ('functional_file', 'realigned_files')]),
             (run_rapidart, reshape_rapidart, [
                 ('outlier_files', 'outlier_file')]),
             (get_info, reshape_rapidart, [
                 ('run_info', 'run_info'),
                 ('contrast_entities', 'contrast_entities')]),
-            (realign_runs, reshape_rapidart, [
-                ('out_file', 'functional_file')]),
+            (wrangle_volumes, reshape_rapidart, [
+                ('functional_file', 'functional_file')]),
             (reshape_rapidart, specify_model, [('run_info', 'subject_info')]),
             (reshape_rapidart, plot_matrices, [('run_info', 'run_info')]),
             (reshape_rapidart, collate, [
@@ -276,13 +290,13 @@ def fsl_run_level_wf(model,
         run_susan.inputs.dimension = dimensionality
         estimate_model.inputs.mask_size = smoothing_fwhm
         workflow.connect([
-            (realign_runs, mean_img, [('out_file', 'in_file')]),
-            (realign_runs, median_img, [('out_file', 'in_file')]),
+            (wrangle_volumes, mean_img, [('functional_file', 'in_file')]),
+            (wrangle_volumes, median_img, [('functional_file', 'in_file')]),
             (get_info, mean_img, [('brain_mask', 'mask_file')]),
             (get_info, median_img, [('brain_mask', 'mask_file')]),
             (mean_img, merge, [('out_file', 'in1')]),
             (median_img, merge, [('out_stat', 'in2')]),
-            (realign_runs, run_susan, [('out_file', 'in_file')]),
+            (wrangle_volumes, run_susan, [('functional_file', 'in_file')]),
             (median_img, run_susan, [
                 (('out_stat', utils.get_btthresh), 'brightness_threshold')]),
             (merge, run_susan, [(('out', utils.get_usans), 'usans')]),
@@ -295,9 +309,10 @@ def fsl_run_level_wf(model,
     else:
         workflow.connect([
             (get_info, mask_functional, [('brain_mask', 'in_file2')]),
-            (realign_runs, mask_functional, [('out_file', 'in_file')]),
-            (mask_functional, specify_model,
-                [('out_file', 'functional_runs')]),
+            (wrangle_volumes, mask_functional, [
+                ('functional_file', 'in_file')]),
+            (mask_functional, specify_model, [
+                ('out_file', 'functional_runs')]),
             (mask_functional, fit_model, [('out_file', 'functional_data')]),
         ])
 
@@ -305,9 +320,9 @@ def fsl_run_level_wf(model,
         (get_info, specify_model, [('repetition_time', 'time_repetition')]),
 
         (specify_model, fit_model, [('session_info', 'session_info')]),
-        (get_info, fit_model, [('repetition_time', 'interscan_interval'),
-                               ('run_contrasts', 'contrasts')]),
-
+        (get_info, fit_model, [
+            ('repetition_time', 'interscan_interval'),
+            ('run_contrasts', 'contrasts')]),
         (fit_model, first_level_design, [
             ('interscan_interval', 'interscan_interval'),
             ('session_info', 'session_info'),
@@ -337,21 +352,25 @@ def fsl_run_level_wf(model,
         (generate_model, estimate_model, [('con_file', 'tcon_file')]),
         (estimate_model, calculate_p, [
             (('zstats', utils.flatten), 'in_file')]),
-        (estimate_model, collate, [('copes', 'effect_maps'),
-                                   ('varcopes', 'variance_maps'),
-                                   ('zstats', 'zscore_maps'),
-                                   ('tstats', 'tstat_maps')]),
+        (estimate_model, collate, [
+            ('copes', 'effect_maps'),
+            ('varcopes', 'variance_maps'),
+            ('zstats', 'zscore_maps'),
+            ('tstats', 'tstat_maps')]),
         (calculate_p, collate, [('out_file', 'pvalue_maps')]),
-        (collate, collate_outputs, [('effect_maps', 'effect_maps'),
-                                    ('variance_maps', 'variance_maps'),
-                                    ('zscore_maps', 'zscore_maps'),
-                                    ('pvalue_maps', 'pvalue_maps'),
-                                    ('tstat_maps', 'tstat_maps'),
-                                    ('contrast_metadata', 'metadata')]),
-        (collate_outputs, ds_contrast_maps, [('out', 'in_file'),
-                                             ('metadata', 'entities')]),
-        (collate_outputs, wrangle_outputs, [('metadata', 'contrast_metadata'),
-                                            ('out', 'contrast_maps')]),
+        (collate, collate_outputs, [
+            ('effect_maps', 'effect_maps'),
+            ('variance_maps', 'variance_maps'),
+            ('zscore_maps', 'zscore_maps'),
+            ('pvalue_maps', 'pvalue_maps'),
+            ('tstat_maps', 'tstat_maps'),
+            ('contrast_metadata', 'metadata')]),
+        (collate_outputs, ds_contrast_maps, [
+            ('out', 'in_file'),
+            ('metadata', 'entities')]),
+        (collate_outputs, wrangle_outputs, [
+            ('metadata', 'contrast_metadata'),
+            ('out', 'contrast_maps')]),
     ])
 
     return workflow
