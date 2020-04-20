@@ -111,7 +111,7 @@ jobs:
             datalad get ds003_fmriprep/sub-0{1,2,3}/func/*_space-MNI152NLin2009cAsym_desc-*.nii.gz \
                         ds003_fmriprep/sub-0{1,2,3}/func/*_desc-confounds_*.tsv \
                         ds003_fmriprep/dataset_description.json \
-                        ds003_fmriprep/sub-*/*/*.json
+                        ds003_fmriprep/sub-0{1,2,3}/*/*.json
       - run:
           name: Download a model for ds000003
           command: |
@@ -161,7 +161,7 @@ jobs:
               mkdir -p /tmp/ds003/work /tmp/ds003/derivatives
               chmod 777 /tmp/ds003/work /tmp/ds003/derivatives
               export CONDA_PREFIX=/opt/conda/envs/neuro
-              docker run --rm -v /tmp/data/ds003_fmriprep:/data:ro \
+              docker run --rm -v /tmp/data/ds003_fmriprep:/data: \
                   -v /tmp/ds003/derivatives:/out \
                   -v /tmp/ds003/work:/scratch \
                   -v /tmp/data/ds003_models:/models \
