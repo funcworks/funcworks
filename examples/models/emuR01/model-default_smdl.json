@@ -1,0 +1,83 @@
+{
+  "Name": "model-initial",
+  "Description": "Initial Model for emuR01",
+  "Input": {
+    "Include": {
+      "task":"test"
+    },
+  "Steps": [
+    {
+      "Level": "run",
+      "Transformations": [],
+      "Model": {
+        "X": [
+          "trial_type.neg_lure_fa", "trial_type.neu_lure_fa", "trial_type.pos_lure_fa",
+          "trial_type.neg_lure_cr", "trial_type.neu_lure_cr", "trial_type.pos_lure_cr",
+          "trial_type.neg_foil_fa", "trial_type.neu_foil_fa", "trial_type.pos_foil_fa",
+          "trial_type.neg_foil_cr", "trial_type.neu_foil_cr", "trial_type.pos_foil_cr",
+          "trial_type.neg_targ_ht", "trial_type.neu_targ_ht", "trial_type.pos_targ_ht",
+          "trial_type.neg_targ_ms", "trial_type.neu_targ_ms", "trial_type.pos_targ_ms",
+          "trial_type.non_resp_tr",
+          "trans_x", "trans_y", "trans_z", "rot_x", "rot_y", "rot_z",
+          "trans_x_derivative1", "trans_y_derivative1", "trans_z_derivative1",
+          "rot_x_derivative1", "rot_y_derivative1", "rot_z_derivative1"
+        ]
+      },
+      "DummyContrasts": {
+        "Type": "t"
+      },
+      "Contrasts" : [
+        {
+          "Name": "neg_lure_fa_gt_neu_lure_fa",
+          "ConditionList": ["trial_type.neg_lure_fa", "trial_type.neu_lure_fa"],
+          "Weights": [1, -1],
+          "Type": "t"
+        },
+        {
+          "Name": "neg_lure_fa_gt_pos_lure_fa",
+          "ConditionList": ["trial_type.neg_lure_fa", "trial_type.pos_lure_fa"],
+          "Weights": [1, -1],
+          "Type": "t"
+        },
+        {
+          "Name": "neu_lure_fa_gt_pos_lure_fa",
+          "ConditionList": ["trial_type.neu_lure_fa", "trial_type.pos_lure_fa"],
+          "Weights": [1, -1],
+          "Type": "t"
+        },
+        {
+          "Name": "neg_lure_fa_lt_neu_lure_fa",
+          "ConditionList": ["trial_type.neg_lure_fa", "trial_type.neu_lure_fa"],
+          "Weights": [-1, 1],
+          "Type": "t"
+        },
+        {
+          "Name": "task_vs_baseline",
+          "ConditionList": [
+            "trial_type.neg_lure_fa", "trial_type.neu_lure_fa", "trial_type.pos_lure_fa",
+            "trial_type.neg_lure_cr", "trial_type.neu_lure_cr", "trial_type.pos_lure_cr",
+            "trial_type.neg_foil_fa", "trial_type.neu_foil_fa", "trial_type.pos_foil_fa",
+            "trial_type.neg_foil_cr", "trial_type.neu_foil_cr", "trial_type.pos_foil_cr",
+            "trial_type.neg_targ_ht", "trial_type.neu_targ_ht", "trial_type.pos_targ_ht",
+            "trial_type.neg_targ_ms", "trial_type.neu_targ_ms", "trial_type.pos_targ_ms"
+          ],
+          "Weights": [
+            0.053, 0.053, 0.053,
+            0.053, 0.053, 0.053,
+            0.053, 0.053, 0.053,
+            0.053, 0.053, 0.053,
+            0.053, 0.053, 0.053,
+            0.053, 0.053, 0.053
+          ],
+          "Type": "t"
+        }
+      ]
+    },
+    {
+      "Level":"session",
+      "DummyContrasts": {
+        "Type":"t"
+      }
+    }
+  ]
+}

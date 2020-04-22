@@ -191,7 +191,6 @@ class BIDSGet(SimpleInterface):
             **fixed_entities,
             'datatype': 'func', 'desc': 'preproc',
             'extension': 'nii.gz', 'suffix': 'bold'}
-
         functional_files = layout.get(**functional_entities)
         if len(functional_files) == 0:
             raise FileNotFoundError(
