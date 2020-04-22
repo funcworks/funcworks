@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Package information."""
 from pathlib import Path
 import importlib.util

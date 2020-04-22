@@ -1,5 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """Main run script."""
-# pylint: disable=C0103,R0913,R0914,W0404,C0116,W0212,W0613,W0611,W1202,C0415
 import gc
 import sys
 import uuid
@@ -71,7 +72,7 @@ def get_parser():
             "smoothing on run-level maps before evaluating the dataset level.")
     )
     parser.add_argument(
-        '-w', '--work_dir', action='store', type=Path,
+        '-w', '--work-dir', action='store', type=Path,
         help='Path where intermediate results should be stored.')
     parser.add_argument(
         '--use-rapidart', action='store_true', default=False,
@@ -97,7 +98,7 @@ def get_parser():
         '-sa', '--smooth-autocorrelations', action='store_true',
         default=False,
         help='Option to enable smoothing of autocorrelations '
-             'during run level analyses (default: False).'
+             'during run level analyses.'
     )
     parser.add_argument(
         '--version',

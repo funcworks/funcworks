@@ -1,6 +1,6 @@
 [run]
 branch = True
-source = /opt/miniconda-latest/envs/neuro/lib/python3.8/site-packages/funcworks
+source = /opt/conda/envs/neuro/lib/python3.6/site-packages/funcworks
 omit =
     */tests/*
 concurrency = multiprocessing

@@ -8,7 +8,7 @@ from nipype import logging
 from nipype.utils.filemanip import copyfile
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec, TraitedSpec,
-    InputMultiPath, OutputMultiPath, File, Directory, Str,
+    InputMultiPath, OutputMultiPath, File, Directory,
     traits, isdefined, SimpleInterface)
 from nipype.interfaces.io import IOBase
 import nibabel as nb
@@ -158,40 +158,101 @@ class _BIDSGetInputSpec(BaseInterfaceInputSpec):
     database_path = Directory(
         exists=True, mandatory=True, desc="Path to BIDS Dataset DBCACHE")
     fixed_entities = traits.Dict(
-        key_trait=Str,
-        value_trait=traits.Dict, desc="Queries for outfield outputs")
+        desc="Queries for outfield outputs")
+    align_volumes = traits.Either(
+        traits.Int, None, default=None,
+        desc='Run reference to align functional volumes')
 
 
 class _BIDSGetOutputSpec(TraitedSpec):
     functional_files = OutputMultiPath(File)
-    # mask_files = OutputMultiPath(File)
-    # reference_files = OutputMultiPath(File)
+    mask_files = OutputMultiPath(File)
+    reference_files = OutputMultiPath(File)
+    metadata_files = OutputMultiPath(File)
+    events_files = OutputMultiPath(File)
+    regressor_files = OutputMultiPath(File)
+    entities = OutputMultiPath(traits.Dict)
 
 
 class BIDSGet(SimpleInterface):
-    """
-    Module that allows querys for functional files and associated masks/refs.
-
-    Examples
-    --------
-    """
+    """Interface that querys for functional files and associated masks/refs."""
 
     input_spec = _BIDSGetInputSpec
     output_spec = _BIDSGetOutputSpec
-    _always_run = False
+    _always_run = True
     _pkg = "bids"
 
     def _run_interface(self, runtime):
         from bids import BIDSLayout
         layout = BIDSLayout.load(database_path=self.inputs.database_path)
         fixed_entities = self.inputs.fixed_entities
+
         functional_entities = {
+            **fixed_entities,
             'datatype': 'func', 'desc': 'preproc',
-            'extension': 'nii.gz', 'suffix': 'bold',
-            'subject': fixed_entities['subject']}
+            'extension': 'nii.gz', 'suffix': 'bold'}
+
         functional_files = layout.get(**functional_entities)
         if len(functional_files) == 0:
             raise FileNotFoundError(
                 f'Unable to find functional image with '
                 f'specified entities {functional_entities}')
+
+        outputs = dict(
+            mask_files=[],
+            reference_files=[],
+            events_files=[],
+            metadata_files=[],
+            regressor_files=[],
+            entities=[])
+
+        for file in functional_files:
+            ents = layout.parse_file_entities(file.path)
+            if 'space' not in ents:
+                ents['space'] = None
+            file_ents = dict(
+                events={
+                    **ents,
+                    'desc': None, 'extension': 'tsv',
+                    'suffix': 'events', 'space': None},
+                metadata={**ents, 'extension': 'json'},
+                regressor={
+                    **ents, 'desc': 'confounds', 'space': None,
+                    'suffix': 'regressors', 'extension': 'tsv'},
+                mask={**ents, 'desc': 'brain', 'suffix': 'mask'},
+                reference={**ents, 'suffix': 'boldref', 'desc': None})
+            if self.inputs.align_volumes and 'run' not in ents:
+                raise ValueError(
+                    f'Attempted to align to when run entity is not present in '
+                    f'{file.path}.')
+            elif self.inputs.align_volumes:
+                file_ents['mask']['run'] = self.inputs.align_volumes
+                file_ents['reference']['run'] = self.inputs.align_volumes
+
+            ents.pop('suffix', None)
+            ents.pop('desc', None)
+            outputs['entities'].append(ents)
+            for filetype, entities in file_ents.items():
+                files = layout.get(**entities)
+                if len(files) > 1:
+                    raise ValueError(
+                        f'More than one {filetype} produced for given '
+                        f'entities {entities}\n'
+                        f'{[x.path for x in files]}'
+                        f'{ents}')
+                elif len(files) == 0:
+                    raise FileNotFoundError(
+                        f'No {filetype} found for given entities '
+                        f'{entities}')
+                else:
+                    outputs[f'{filetype}_files'].append(files[0])
+
         self._results['functional_files'] = functional_files
+        self._results['mask_files'] = outputs['mask_files']
+        self._results['reference_files'] = outputs['reference_files']
+        self._results['metadata_files'] = outputs['metadata_files']
+        self._results['events_files'] = outputs['events_files']
+        self._results['regressor_files'] = outputs['regressor_files']
+        self._results['entities'] = outputs['entities']
+
+        return runtime

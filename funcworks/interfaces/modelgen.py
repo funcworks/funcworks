@@ -11,18 +11,15 @@ from ..utils import snake_to_camel
 
 
 class _GetRunModelInfoInputSpec(BaseInterfaceInputSpec):
-    bids_dir = Directory(exists=True, mandatory=True)
-    functional_file = traits.Either(File, traits.Str)
-    database_path = Directory(exists=True, mandatory=True)
+    metadata_file = File()
+    regressor_file = File()
+    events_file = File()
+    entities = traits.Dict(mandatory=True)
     model = traits.Dict(mandatory=True)
     detrend_poly = traits.Any(
         default=None,
         desc=('Legendre polynomials to regress out'
               'for temporal filtering'))
-    align_volumes = traits.Any(
-        default=None,
-        desc=('Target volume for functional realignment',
-              'if not value is specified, will not functional file'))
 
 
 class _GetRunModelInfoOutputSpec(TraitedSpec):
@@ -30,7 +27,6 @@ class _GetRunModelInfoOutputSpec(TraitedSpec):
         desc='Model Info required to construct Run Level Model')
     run_contrasts = traits.List(
         desc='List of tuples describing each contrasts')
-    run_entities = traits.Dict(desc='Run specific BIDS Entities')
     contrast_entities = OutputMultiPath(
         traits.Dict(),
         desc='Contrast specific list of entities')
@@ -40,12 +36,6 @@ class _GetRunModelInfoOutputSpec(TraitedSpec):
     repetition_time = traits.Float(desc='Repetition Time for the dataset')
     contrast_names = traits.List(
         desc='List of Contrast Names to pass to higher levels')
-    reference_image = traits.Either(
-        File, traits.Str,
-        desc='Reference Image for functional realignment')
-    brain_mask = traits.Either(
-        File, traits.Str,
-        desc='Brain mask for functional image')
 
 
 class GetRunModelInfo(IOBase):
@@ -57,97 +47,43 @@ class GetRunModelInfo(IOBase):
 
     def _list_outputs(self):
         import json
-        import pandas as pd
-        from bids import BIDSLayout
-        layout = BIDSLayout.load(self.inputs.database_path)
         outputs = {}
 
-        (regressor_file, meta_file, events_file,
-         outputs['reference_image'], outputs['brain_mask'],
-         outputs['run_entities']) = self._get_required_files(layout=layout)
+        (outputs['motion_parameters'],
+         n_timepoints) = self._get_motion_parameters()
 
-        outputs['motion_parameters'] = self._get_motion_parameters(
-            regressor_file=regressor_file)
-
-        with open(meta_file, 'r') as meta_read:
+        with open(self.inputs.metadata_file, 'r') as meta_read:
             run_metadata = json.load(meta_read)
         outputs['repetition_time'] = run_metadata['RepetitionTime']
         (outputs['run_info'], event_regressors,
-         confound_regressors) = self._get_model_info(
-             events_file=events_file, regressor_file=regressor_file)
+         confound_regressors) = self._get_model_info()
         (outputs['run_contrasts'],
          outputs['contrast_names']) = self._get_contrasts(
              event_names=event_regressors)
         all_regressors = event_regressors + confound_regressors
-        n_vols = len(pd.read_csv(regressor_file))
-        outputs['run_entities'].update({
-            'Volumes': n_vols,
-            'DegreesOfFreedom': (n_vols - len(all_regressors))})
+        degrees_of_freedom = n_timepoints - len(all_regressors)
         outputs['contrast_entities'] = self._get_entities(
             contrasts=outputs['run_contrasts'],
-            run_entities=outputs['run_entities'])
+            dof=degrees_of_freedom,
+            n_timepoints=n_timepoints)
 
         if self.inputs.detrend_poly:
-            polynomial_names, polynomial_arrays = self._detrend_polynomial(
-                regressor_file, self.inputs.detrend_poly)
+            polynomial_names, polynomial_arrays = self._detrend_polynomial()
             outputs['run_info'].regressor_names.extend(polynomial_names)
             outputs['run_info'].regressors.extend(polynomial_arrays)
 
         return outputs
 
-    def _get_required_files(self, layout):
-        # A workaround to a current issue in pybids
-        # that causes massive resource use when indexing derivative tsv files
-        from pathlib import Path
-        from bids.layout import parse_file_entities
-        func = Path(self.inputs.functional_file)
-        entities = parse_file_entities(str(func))
-        regressor_file = layout.get(
-            **{**entities,
-               'desc': 'confounds', 'space': None,
-               'suffix': 'regressors', 'extension': 'tsv'})[0].path
-
-        meta_file = layout.get(**{**entities, 'extension': 'json'})[0].path
-        events_file = layout.get(
-            **{**entities, 'desc': None, 'space': None,
-               'suffix': 'events', 'extension': 'tsv'})[0].path
-
-        if self.inputs.align_volumes and 'run' not in entities:
-            raise ValueError(
-                'align volumes is set, but dataset '
-                'does not appear to have multiple runs')
-        elif self.inputs.align_volumes:
-            reference_entities = {
-                **entities,
-                'run': self.inputs.align_volumes,
-                'suffix': 'boldref',
-                'desc': None}
-            mask_entities = {
-                **entities,
-                'run': self.inputs.align_volumes,
-                'desc': 'brain', 'suffix': 'mask'}
-        else:
-            reference_entities = {
-                **entities,
-                'suffix': 'boldref',
-                'desc': None}
-            mask_entities = {
-                **entities,
-                'desc': 'brain', 'suffix': 'mask'}
-
-        reference_image = layout.get(**reference_entities)[0].path
-        mask_image = layout.get(**mask_entities)[0].path
-        return (regressor_file, meta_file, events_file,
-                reference_image, mask_image, entities)
-
-    def _get_model_info(self, events_file, regressor_file):
+    def _get_model_info(self):
         import pandas as pd
         import numpy as np
 
-        event_data = pd.read_csv(events_file, sep='\t')
-        conf_data = pd.read_csv(regressor_file, sep='\t')
-        conf_data.fillna(0, inplace=True)
         level_model = self.inputs.model
+
+        event_data = pd.read_csv(self.inputs.events_file, sep='\t')
+        conf_data = pd.read_csv(self.inputs.regressor_file, sep='\t')
+        conf_data.fillna(0, inplace=True)
+
         run_info = {'conditions': [],
                     'onsets': [],
                     'amplitudes': [],
@@ -193,7 +129,7 @@ class GetRunModelInfo(IOBase):
             contrast_names.append(dcontrast)
 
         for contrast in real_contrasts:
-            if not set(event_names).issubset(contrast['ConditionList']):
+            if not set(contrast['ConditionList']).issubset(set(event_names)):
                 continue
             contrast_names.append(contrast['Name'])
             if contrast['Name'] == 'task_vs_baseline':
@@ -209,44 +145,45 @@ class GetRunModelInfo(IOBase):
                                       contrast['Weights']))
         return contrast_spec, contrast_names
 
-    @staticmethod
-    def _get_motion_parameters(regressor_file):
+    def _get_motion_parameters(self):
         from pathlib import Path
         import pandas as pd
-        regressor_file = Path(regressor_file)
+        regressor_file = Path(self.inputs.regressor_file)
         motparams_path = str(regressor_file.name).replace(
             'regressors', 'motparams')
         motparams_path = Path.cwd() / motparams_path
 
         confound_data = pd.read_csv(regressor_file, sep='\t')
+        n_timepoints = len(confound_data)
         # Motion data gets formatted FSL style, with x, y, z rotation,
         # then x,y,z translation
         motion_data = confound_data[['rot_x', 'rot_y', 'rot_z',
                                      'trans_x', 'trans_y', 'trans_z']]
         motion_data.to_csv(motparams_path, sep='\t', header=None, index=None)
         motion_params = motparams_path
-        return motion_params
+        return motion_params, n_timepoints
 
-    @staticmethod
-    def _get_entities(contrasts, run_entities):
+    def _get_entities(self, contrasts, dof, n_timepoints):
+        run_entities = self.inputs.entities.copy()
         contrast_entities = []
         contrast_names = [contrast[0] for contrast in contrasts]
         for contrast_name in contrast_names:
-            run_entities.update({'contrast': contrast_name})
+            run_entities['contrast'] = contrast_name
+            run_entities['DegreesOfFreedom'] = dof
+            run_entities['NumTimepoints'] = n_timepoints
             contrast_entities.append(run_entities.copy())
         return contrast_entities
 
-    @staticmethod
-    def _detrend_polynomial(regressor_file, detrend_poly=None):
+    def _detrend_polynomial(self):
         import numpy as np
         import pandas as pd
         from scipy.special import legendre
 
-        regressors_frame = pd.read_csv(regressor_file)
+        regressors_frame = pd.read_csv(self.inputs.regressor_file)
 
         poly_names = []
         poly_arrays = []
-        for i in range(0, detrend_poly + 1):
+        for i in range(0, self.inputs.detrend_poly + 1):
             poly_names.append(f'legendre{i:02d}')
             poly_arrays.append(
                 legendre(i)(np.linspace(-1, 1, len(regressors_frame))))
@@ -339,7 +276,6 @@ class GenerateHigherInfo(IOBase):
             organization[org_key]['Metadata']['NumLevelTimepoints'] = len(
                 organization[org_key]['Files'])
             organization[org_key]['Metadata'].pop('stat', None)
-            organization[org_key]['Metadata'].pop('run', None)
 
         return organization
 
@@ -383,6 +319,7 @@ class GenerateHigherInfo(IOBase):
 
                 if metadata['space'] is None:
                     metadata.pop('space', None)
+                    metadata.pop('run', None)
                 metadata.pop('stat', None)
                 maps_info['map_entities'].append(metadata.copy())
                 metadata['contrast'] = snake_to_camel(metadata['contrast'])
@@ -446,7 +383,7 @@ class GenerateHigherInfo(IOBase):
                     {**ents, 'desc': matrix_type},
                     path_patterns=matrix_patt, validate=False)
                 matrix_path = Path.cwd() / matrix_path
-                if matrix_path.is_file:  # Remove file if it exists
+                if matrix_path.is_file():  # Remove file if it exists
                     matrix_path.unlink()
                 matrix_path = str(matrix_path.as_posix())
                 mat_file = open(matrix_path, 'a')

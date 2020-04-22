@@ -54,33 +54,6 @@
           "Type": "t"
         }
       ]
-    },
-    {
-      "Level": "subject",
-      "DummyContrasts": {
-        "Type": "FEMA"
-      }
-    },
-    {
-      "Level": "dataset",
-      "DummyContrasts": {
-        "Conditions": ["word_gt_pseudo", "task_vs_baseline"],
-        "Type": "t"
-        },
-      "Contrasts":[
-        {
-          "Name": "any_words",
-          "ConditionList": [
-            "trial_type.word",
-            "trial_type.pseudoword"
-          ],
-          "Weights": [
-            [1, 0],
-            [0, 1]
-          ],
-          "Type": "F"
-        }
-      ]
     }
   ]
 }
