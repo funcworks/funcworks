@@ -106,8 +106,8 @@ ENV PATH="/usr/lib/fsl/5.0:/usr/lib/afni/bin:$PATH"
 #------------------
 # Install Miniconda
 #------------------
-ENV CONDA_DIR=/opt/conda \
-    PATH=/opt/conda/bin:$PATH
+ENV CONDA_DIR="/opt/miniconda-latest" \
+    PATH="/opt/miniconda-latest/bin:$PATH"
 RUN echo "Downloading Miniconda installer ..." \
     && miniconda_installer=/tmp/miniconda.sh \
     && curl -sSL --retry 5 -o $miniconda_installer https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh \
