@@ -228,7 +228,7 @@ jobs:
           no_output_timeout: 40m
           command: |
             if [[ -n "$DOCKER_PASS" ]]; then
-              docker login -u $DOCKER_USER -p $DOCKER_PASS
+              echo "$DOCKER_PASS" | docker login -u $DOCKER_USER --password-stdin
               docker tag adamkimbler/funcworks adamkimbler/funcworks:master
               docker push adamkimbler/funcworks:master
             fi
