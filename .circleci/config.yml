@@ -174,12 +174,32 @@ jobs:
                   -d /data -m /models/model-001_smdl.json -w /scratch \
                   --participant-label 01 02 03
         - run:
+            name: Run Funcworks - Super Deluxe
+            no_output_timeout: 2h
+            command: |
+              mkdir -p /tmp/ds003/work_sdlx /tmp/ds003/derivatives
+              chmod 777 /tmp/ds003/work_sdlx /tmp/ds003/derivatives
+              export CONDA_PREFIX=/opt/miniconda-latest/envs/neuro
+              docker run --rm -v /tmp/data/ds003_fmriprep:/data: \
+                  -v /tmp/ds003/derivatives:/out \
+                  -v /tmp/ds003/work_sdlx:/scratch \
+                  -v /tmp/data/ds003_models:/models \
+                  -e COVERAGE_FILE=/scratch/.coverage \
+                  --entrypoint="/neurodocker/startup.sh" \
+                  adamkimbler/funcworks:latest \
+                  coverage run \
+                  --rcfile /src/funcworks/docker/multiproc.coveragerc \
+                  $CONDA_PREFIX/bin/funcworks /data/sourcedata /out dataset \
+                  -d /data -m /models/model-001_smdl.json -w /scratch \
+                  --participant-label 01 02 03
+        - run:
             name: Combine coverage and submit
             command: |
                 pyenv local 3.6.3
                 python -m coverage combine \
                   --rcfile /tmp/src/funcworks/docker/multiproc.coveragerc \
-                  /tmp/ds003/work/.coverage.*
+                  /tmp/ds003/work/.coverage.* \
+                  /tmp/ds003/work_sdlx/.coverage.*
                 sed -i -e 's/.opt.miniconda-latest.envs.neuro.lib.python3.6.site-packages/\/tmp\/src\/funcworks/g' .coverage
                 python -m coverage xml
                 python -m codecov --file coverage.xml --flags ds003 -e CIRCLE_JOB
