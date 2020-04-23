@@ -205,7 +205,33 @@ jobs:
                 python -m codecov --file coverage.xml --flags ds003 -e CIRCLE_JOB
         - store_artifacts:
             path: /tmp/ds003
-
+  deploy_master:
+    machine:
+      image: circleci/classic:201711-01
+    working_directory: /tmp/src/funcworks
+    steps:
+      - restore_cache:
+          keys:
+            - docker-v0-{{ .Branch }}-{{ .Revision }}
+      - run:
+          name: Load Docker image layer cache
+          no_output_timeout: 30m
+          command: |
+            docker info
+            set +o pipefail
+            if [ -f /tmp/cache/docker.tar.gz ]; then
+              zcat /tmp/cache/docker.tar.gz | docker load
+              docker images
+            fi
+      - run:
+          name: Deploy to Docker Hub
+          no_output_timeout: 40m
+          command: |
+            if [[ -n "$DOCKER_PASS" ]]; then
+              docker login -u $DOCKER_USER -p $DOCKER_PASS
+              docker tag adamkimbler/funcworks adamkimbler/funcworks:master
+              docker push adamkimbler/funcworks:master
+            fi
 workflows:
   version: 2.1
   build_test:
@@ -229,6 +255,12 @@ workflows:
           filters:
             tags:
               only: /.*/
+      - deploy_master:
+          requires:
+            - test_ds003
+          filters:
+            branches:
+              only: master
   style_check:
     jobs:
       - style_check
