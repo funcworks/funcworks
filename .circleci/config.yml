@@ -242,6 +242,8 @@ workflows:
               ignore: /doc\/.*/
             tags:
               only: /.*/
+          context: docker-user
+
       - cache_test_data:
           filters:
             branches:
