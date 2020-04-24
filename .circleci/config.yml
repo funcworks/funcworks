@@ -108,10 +108,10 @@ jobs:
           command: |
             datalad install -r ///labs/poldrack/ds003_fmriprep
             datalad update ds003_fmriprep/
-            datalad get ds003_fmriprep/sub-0{1,2,3}/func/*_space-*_desc-*.nii.gz \
-                        ds003_fmriprep/sub-0{1,2,3}/func/*_desc-confounds_*.tsv \
+            datalad get ds003_fmriprep/sub-0{1,2}/func/*_space-*_desc-*.nii.gz \
+                        ds003_fmriprep/sub-0{1,2}/func/*_desc-confounds_*.tsv \
                         ds003_fmriprep/dataset_description.json \
-                        ds003_fmriprep/sub-0{1,2,3}/*/*.json
+                        ds003_fmriprep/sub-0{1,2}/*/*.json
       - run:
           name: Download a model for ds000003
           command: |
@@ -155,6 +155,20 @@ jobs:
                 docker images
               fi
         - run:
+            name: Run Module Tests
+            no_output_timeout: 2h
+            command: |
+              mkdir -p /tmp/ds003/work_modules
+              chmod 777 /tmp/ds003/work_modules
+              export CONDA_PREFIX=/opt/miniconda-latest/envs/neuro
+              docker run --rm -v /tmp/ds003/work_modules:/scratch \
+                  -e COVERAGE_FILE=/scratch/.coverage \
+                  --entrypoint="/neurodocker/startup.sh" \
+                  adamkimbler/funcworks:latest \
+                  pytest --cov=$CONDA_PREFIX/lib/python3.6/site-packages/funcworks/ \
+                  --cov-config=/src/funcworks/docker/multiproc.coveragerc \
+                  $CONDA_PREFIX/lib/python3.6/site-packages/funcworks/tests/
+        - run:
             name: Run Funcworks
             no_output_timeout: 2h
             command: |
@@ -172,7 +186,7 @@ jobs:
                   --rcfile /src/funcworks/docker/multiproc.coveragerc \
                   $CONDA_PREFIX/bin/funcworks /data/sourcedata /out dataset \
                   -d /data -m /models/model-001_smdl.json -w /scratch \
-                  --participant-label 01 02 03
+                  --participant-label 01 02
         - run:
             name: Run Funcworks - Super Deluxe
             no_output_timeout: 2h
@@ -191,7 +205,10 @@ jobs:
                   --rcfile /src/funcworks/docker/multiproc.coveragerc \
                   $CONDA_PREFIX/bin/funcworks /data/sourcedata /out dataset \
                   -d /data -m /models/model-001_smdl.json -w /scratch \
-                  --participant-label 01 02 03
+                  --participant-label 01 02 \
+                  --smoothing 4 --smooth-autocorrelations \
+                  --use-rapidart --detrend-poly 3 \
+
         - run:
             name: Combine coverage and submit
             command: |
@@ -199,7 +216,8 @@ jobs:
                 python -m coverage combine \
                   --rcfile /tmp/src/funcworks/docker/multiproc.coveragerc \
                   /tmp/ds003/work/.coverage.* \
-                  /tmp/ds003/work_sdlx/.coverage.*
+                  /tmp/ds003/work_sdlx/.coverage.* \
+                  /tmp/ds003/work_modules/.coverage*
                 sed -i -e 's/.opt.miniconda-latest.envs.neuro.lib.python3.6.site-packages/\/tmp\/src\/funcworks/g' .coverage
                 python -m coverage xml
                 python -m codecov --file coverage.xml --flags ds003 -e CIRCLE_JOB

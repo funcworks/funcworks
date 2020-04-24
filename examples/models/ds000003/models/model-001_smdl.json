@@ -2,7 +2,10 @@
   "Name": "ds003_model001",
   "Description": "",
   "Input": {
-    "task": "rhymejudgment"
+    "Include": {
+      "task": "rhymejudgment",
+      "space": "MNI152NLin2009cAsym"
+    }
   },
   "Steps": [
     {

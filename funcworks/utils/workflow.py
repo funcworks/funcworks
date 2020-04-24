@@ -38,9 +38,10 @@ def reshape_ra(run_info, functional_file, outlier_file, contrast_entities):
     import nibabel as nb
     from nipype.interfaces.base import Bunch
     run_dict = run_info.dictcopy()
-    ntimepoints = nb.load(functional_file).get_data().shape[-1]
+    ntimepoints = nb.load(functional_file).get_fdata().shape[-1]
     outlier_frame = pd.read_csv(
         outlier_file, header=None, names=['outlier_index'])
+    outlier_frame['outlier_index'] = outlier_frame['outlier_index'].astype(int)
     for i, row in outlier_frame.iterrows():
         run_dict['regressor_names'].append(f'rapidart{i:02d}')
         ra_col = np.zeros(ntimepoints)
