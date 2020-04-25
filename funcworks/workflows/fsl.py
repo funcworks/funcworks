@@ -3,6 +3,7 @@
 from pathlib import Path
 from nipype.pipeline import engine as pe
 from nipype.interfaces import fsl
+from nipype.interfaces import afni
 from nipype.interfaces.utility import Function, IdentityInterface, Merge
 from nipype.algorithms import modelgen, rapidart as ra
 from ..interfaces.bids import BIDSGet, BIDSDataSink
@@ -27,6 +28,7 @@ def fsl_run_level_wf(model,
                      detrend_poly=None,
                      align_volumes=None,
                      smooth_autocorrelations=False,
+                     despike=False,
                      name='fsl_run_level_wf'):
     """Generate run level workflow for a given model."""
     bids_dir = Path(bids_dir)
@@ -64,6 +66,11 @@ def fsl_run_level_wf(model,
             'events_file', 'entities'],
         name=f'get_{level}_info')
 
+    despiker = pe.MapNode(
+        afni.Despike(outputtype='NIFTI_GZ'),
+        iterfield=['in_file'],
+        name='despiker')
+
     realign_runs = pe.MapNode(
         fsl.MCFLIRT(
             output_type='NIFTI_GZ',
@@ -74,8 +81,7 @@ def fsl_run_level_wf(model,
     wrangle_volumes = pe.MapNode(
         IdentityInterface(fields=['functional_file']),
         iterfield=['functional_file'],
-        name='wrangle_volumes'
-    )
+        name='wrangle_volumes')
 
     specify_model = pe.MapNode(
         modelgen.SpecifyModel(
@@ -250,7 +256,15 @@ def fsl_run_level_wf(model,
             ('regressor_files', 'regressor_file'),
             ('entities', 'entities')])
     ])
-    if align_volumes:
+
+    if align_volumes and despike:
+        workflow.connect([
+            (getter, despiker, [('functional_files', 'in_file')]),
+            (despiker, realign_runs, [('out_file', 'in_file')]),
+            (getter, realign_runs, [('reference_files', 'ref_file')]),
+            (realign_runs, wrangle_volumes, [('out_file', 'functional_file')])
+        ])
+    elif align_volumes:
         workflow.connect([
             (getter, realign_runs, [
                 ('functional_files', 'in_file'),
@@ -290,7 +304,7 @@ def fsl_run_level_wf(model,
                 ('contrast_entities', 'contrast_metadata')])
         ])
 
-    if smoothing_level == 'l1':
+    if smoothing_level == 'l1' or smoothing_level == 'run':
         run_susan.inputs.fwhm = smoothing_fwhm
         run_susan.inputs.dimension = dimensionality
         estimate_model.inputs.mask_size = smoothing_fwhm

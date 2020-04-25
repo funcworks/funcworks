@@ -208,6 +208,7 @@ jobs:
                   --participant-label 01 02 \
                   --smoothing 4 --smooth-autocorrelations \
                   --use-rapidart --detrend-poly 3 \
+                  --despike
 
         - run:
             name: Combine coverage and submit

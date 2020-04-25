@@ -18,7 +18,8 @@ def init_funcworks_wf(model_file,
                       use_rapidart,
                       detrend_poly,
                       align_volumes,
-                      smooth_autocorrelations):
+                      smooth_autocorrelations,
+                      despike):
     """Initialize funcworks single subject workflow for all subjects."""
     with open(model_file, 'r') as read_mdl:
         model = json.load(read_mdl)
@@ -60,6 +61,7 @@ def init_funcworks_wf(model_file,
             detrend_poly=detrend_poly,
             align_volumes=align_volumes,
             smooth_autocorrelations=smooth_autocorrelations,
+            despike=despike,
             name=f'single_subject_{subject_id}_wf')
         crash_dir = (Path(output_dir) / 'funcworks'
                      / 'logs' / model['Name']
@@ -90,6 +92,7 @@ def init_funcworks_subject_wf(model,
                               detrend_poly,
                               align_volumes,
                               smooth_autocorrelations,
+                              despike,
                               name):
     """Produce single subject workflow for a subject given a model spec."""
     workflow = Workflow(name=name)
@@ -113,6 +116,7 @@ def init_funcworks_subject_wf(model,
                 detrend_poly=detrend_poly,
                 align_volumes=align_volumes,
                 smooth_autocorrelations=smooth_autocorrelations,
+                despike=despike,
                 name=f'fsl_run_level_wf')
             workflow.add_nodes([model])
         else:

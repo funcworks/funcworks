@@ -69,8 +69,8 @@ def get_parser():
             "Optional smoothing TYPE (default: iso) must be one of:"
             "`iso` (isotropic). "
             "e.g., `--smoothing 5:run:iso` will perform a 5mm FWHM isotropic "
-            "smoothing on run-level maps before evaluating the dataset level.")
-    )
+            "smoothing on run-level maps before evaluating the dataset level."
+        ))
     parser.add_argument(
         '-w', '--work-dir', action='store', type=Path,
         help='Path where intermediate results should be stored.')
@@ -98,8 +98,10 @@ def get_parser():
         '-sa', '--smooth-autocorrelations', action='store_true',
         default=False,
         help='Option to enable smoothing of autocorrelations '
-             'during run level analyses.'
-    )
+             'during run level analyses.')
+    parser.add_argument(
+        '--despike', default=False, action='store_true',
+        help='Run afni despike on the data')
     parser.add_argument(
         '--version',
         action='version',
@@ -151,10 +153,10 @@ def main():
 
     missing = check_deps(funcworks_wf)
     if missing:
-        print("Cannot run FUNCWorks. Missing dependencies:", file=sys.stderr)
-        for iface, cmd in missing:
-            print(f"\t{cmd} (Interface: {iface})")
-        sys.exit(2)
+        error_msg = "Cannot run FUNCWorks. Missing dependencies:\n"
+        error_msg += ''.join(
+            [f"\t{cmd} (Interface: {iface})" for iface, cmd in missing])
+        raise MissingDependency(error_msg)
     # Clean up master process before running workflow, which may create forks
     gc.collect()
     # errno = 1
@@ -345,7 +347,8 @@ def build_workflow(opts, retval):
         use_rapidart=opts.use_rapidart,
         detrend_poly=opts.detrend_poly,
         align_volumes=opts.align_volumes,
-        smooth_autocorrelations=opts.smooth_autocorrelations)
+        smooth_autocorrelations=opts.smooth_autocorrelations,
+        despike=opts.despike)
 
     retval['return_code'] = 0
     # logs_path = Path(output_dir) / 'funcworks' / 'logs'
