@@ -271,6 +271,11 @@ def fsl_run_level_wf(model,
                 ('reference_files', 'ref_file')]),
             (realign_runs, wrangle_volumes, [('out_file', 'functional_file')])
         ])
+    elif despike:
+        workflow.connect([
+            (getter, despiker, [('functional_files', 'in_file')]),
+            (despiker, wrangle_volumes, [('out_file', 'functional_file')]),
+        ])
     else:
         workflow.connect([
             (getter, wrangle_volumes, [
