@@ -330,6 +330,7 @@ def fsl_run_level_wf(model,
                 [('out_file', 'functional_runs')]),
             (mask_functional, fit_model, [('out_file', 'functional_data')]),
         ])
+
     else:
         workflow.connect([
             (getter, mask_functional, [('mask_files', 'mask_file')]),
@@ -354,6 +355,7 @@ def fsl_run_level_wf(model,
         (first_level_design, generate_model, [('fsf_files', 'fsf_file')]),
         (first_level_design, generate_model, [('ev_files', 'ev_files')]),
     ])
+
     if detrend_poly:
         workflow.connect([
             (generate_model, correct_matrices, [
@@ -363,6 +365,7 @@ def fsl_run_level_wf(model,
             (correct_matrices, estimate_model, [
                 ('design_matrix', 'design_file')])
         ])
+
     else:
         workflow.connect([
             (generate_model, plot_matrices, [('design_file', 'mat_file')]),
