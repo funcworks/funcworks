@@ -38,6 +38,7 @@ def get_parser():
         description='FUNCWORKs: fMRI FUNCtional WORKflows',
         formatter_class=ArgumentDefaultsHelpFormatter)
 
+    # Required Arguments
     parser.add_argument(
         'bids_dir', action='store', type=Path,
         help='Root folder of BIDS Dataset being analyzed'
@@ -48,18 +49,35 @@ def get_parser():
     parser.add_argument(
         'analysis_level', choices=['run', 'session', 'participant', 'dataset'],
         help='Processing stage to be run (see BIDS-Apps specification).')
+
+    # Optional arguments
     parser.add_argument(
+        '-w', '--work-dir', action='store', type=Path,
+        help='Path where intermediate results should be stored.')
+    parser.add_argument(
+        '--version',
+        action='version',
+        version=__version__)
+
+    g_bids = parser.add_argument_group('Options to specify bids entities')
+    g_bids.add_argument(
         '-m', '--model-file', action='store', type=Path,
         help='Location of BIDS model file')
-    parser.add_argument(
+    g_bids.add_argument(
         '-d', '--derivatives', action='store', nargs='+',
         help='Location containing fMRIPrep preprocessed images.')
-    parser.add_argument(
+    g_bids.add_argument(
         '--participant_label', '--participant-label',
         action='store', nargs='+',
         help='Space delimited list of participant identifiers or a single '
         'identifier (the sub- prefix can be removed)')
-    parser.add_argument(
+    g_bids.add_argument(
+        '--database-path', action='store', default=None,
+        help='Path to existing directory containing BIDS '
+             'Database files useful for speeding up run-time.')
+
+    g_prep = parser.add_argument_group('Options for preprocessing data')
+    g_prep.add_argument(
         '-s', '--smoothing', action='store', metavar="FWHM[:LEVEL:[TYPE]]",
         default=None,
         help=(
@@ -71,41 +89,35 @@ def get_parser():
             "e.g., `--smoothing 5:run:iso` will perform a 5mm FWHM isotropic "
             "smoothing on run-level maps before evaluating the dataset level."
         ))
-    parser.add_argument(
-        '-w', '--work-dir', action='store', type=Path,
-        help='Path where intermediate results should be stored.')
-    parser.add_argument(
-        '--use-rapidart', action='store_true', default=False,
-        help='Use RapidArt artifact detection algorithm.')
-    parser.add_argument(
-        '--use-plugin', action='store', default=None,
-        help='File containing plugin configuration for NiPype.')
-    parser.add_argument(
-        '--detrend-poly', action='store', default=None, type=int,
-        help='Legendre polynomials to use for temporal filtering.')
-    parser.add_argument(
+    g_prep.add_argument(
         '--align-volumes', action='store',
         default=None, type=int,
         help='Bold reference to align timeseries, '
              'this will override any run specific entities '
              'or specifications in the model file '
              'for the boldref and brain_mask.')
-    parser.add_argument(
-        '--database-path', action='store', default=None,
-        help='Path to existing directory containing BIDS '
-             'Database files useful for speeding up run-time.')
-    parser.add_argument(
+    g_prep.add_argument(
+        '--use-rapidart', action='store_true', default=False,
+        help='Use RapidArt artifact detection algorithm.')
+    g_prep.add_argument(
+        '--detrend-poly', action='store', default=None, type=int,
+        help='Legendre polynomials to use for temporal filtering.')
+    g_prep.add_argument(
         '-sa', '--smooth-autocorrelations', action='store_true',
         default=False,
         help='Option to enable smoothing of autocorrelations '
              'during run level analyses.')
-    parser.add_argument(
+    g_prep.add_argument(
         '--despike', default=False, action='store_true',
         help='Run afni despike on the data')
-    parser.add_argument(
-        '--version',
-        action='version',
-        version=__version__)
+
+    g_perf = parser.add_argument_group('Options to impact performance')
+    g_perf.add_argument(
+        '--use-plugin', action='store', default=None,
+        help='File containing plugin configuration for Nipype.')
+    g_perf.add_argument(
+        '--resource-monitor', dest='resource_monitor', action='store_true',
+        help='Use Nipype resource monitoring.')
     return parser
 
 
@@ -138,7 +150,6 @@ def main():
         p.join()
 
         retcode = p.exitcode or retval.get('return_code', 0)
-        #
         # bids_dir = retval.get('bids_dir')
         # output_dir = retval.get('output_dir')
         # work_dir = retval.get('work_dir')
@@ -156,12 +167,15 @@ def main():
         error_msg = "Cannot run FUNCWorks. Missing dependencies:\n"
         error_msg += ''.join(
             [f"\t{cmd} (Interface: {iface})" for iface, cmd in missing])
-        raise MissingDependency(error_msg)
+        raise ModuleNotFoundError(error_msg)
     # Clean up master process before running workflow, which may create forks
     gc.collect()
     # errno = 1
     # Default is error exit unless otherwise set
-    # funcworks_wf.write_graph(graph2use="colored", format='png')
+    try:
+        funcworks_wf.write_graph(graph2use="colored", format='png')
+    except Exception as e:
+        logger.warning(f'Attempt to write graph failed: {e}')
     try:
         funcworks_wf.run(**plugin_settings)
     except Exception as e:
@@ -177,7 +191,7 @@ def main():
         #
         #    if "Workflow did not execute cleanly" not in str(e):
         #         sentry_sdk.capture_exception(e)
-        logger.critical('FUNCWorks failed: %s', e)
+        logger.critical(f'FUNCWorks failed: {e}')
         raise
 
 
@@ -194,7 +208,6 @@ def build_workflow(opts, retval):
     from bids import BIDSLayout
 
     from nipype import logging as nlogging, config as ncfg
-    # from ..__about__ import __version__
     from ..workflows.base import init_funcworks_wf
     from .. import __version__
 
@@ -298,14 +311,14 @@ def build_workflow(opts, retval):
             # 'stop_on_first_crash': opts.stop_on_first_crash,
         },
         'monitoring': {
-            # 'enabled': opts.resource_monitor,
+            'enabled': opts.resource_monitor,
             'sample_frequency': '0.5',
             'summary_append': True,
         }
     })
-    #
-    # if opts.resource_monitor:
-    #     ncfg.enable_resource_monitor()
+
+    if opts.resource_monitor:
+        ncfg.enable_resource_monitor()
     # Called with reports only
     # if opts.reports_only:
     #     build_log.log(25, 'Running --reports-only on participants %s',
@@ -351,9 +364,10 @@ def build_workflow(opts, retval):
         despike=opts.despike)
 
     retval['return_code'] = 0
-    # logs_path = Path(output_dir) / 'funcworks' / 'logs'
-    # boilerplate = retval['workflow'].visit_desc()
     """
+    logs_path = Path(output_dir) / 'funcworks' / 'logs'
+    boilerplate = retval['workflow'].visit_desc()
+
     if boilerplate:
         citation_files = {
             ext: logs_path / ('CITATION.%s' % ext)
