@@ -6,10 +6,10 @@ version: 2.1
 
 jobs:
   style_check:
-    working_directory: /tmp/src/style_check
+    working_directory: /tmp/src/funcworks
     docker:
       # Ubuntu 14.04 with Docker 17.10.0-ce
-      - image: continuumio/miniconda3
+      - image: continuumio/miniconda3:latest
     steps:
       - checkout
       - run:
@@ -111,7 +111,7 @@ jobs:
             datalad get ds003_fmriprep/sub-0{1,2}/func/*_space-*_desc-*.nii.gz \
                         ds003_fmriprep/sub-0{1,2}/func/*_desc-confounds_*.tsv \
                         ds003_fmriprep/dataset_description.json \
-                        ds003_fmriprep/sub-0{1,2}/*/*.json
+                        ds003_fmriprep/sub-*/*/*.json
       - run:
           name: Download a model for ds000003
           command: |

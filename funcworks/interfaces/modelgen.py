@@ -257,11 +257,12 @@ class GenerateHigherInfo(IOBase):
             if contrast_ents['stat'] not in ['effect', 'variance']:
                 continue
             fields = [f'{{{field}}}' for field in split_fields]
-            if 'space' not in contrast_ents.keys():
+            if 'space' not in contrast_ents or contrast_ents['space'] is None:
                 contrast_ents['space'] = 'bold'
             org_key = '.'.join(fields).format(**contrast_ents)
             if contrast_ents['space'] == 'bold':
-                contrast_ents['space'] = None
+                contrast_ents.pop('space')
+
             degrees_of_freedom = contrast_ents.pop('DegreesOfFreedom', None)
             if org_key not in organization.keys():
                 organization[org_key] = {'Files': [contrast_file]}

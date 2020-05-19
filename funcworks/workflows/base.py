@@ -117,7 +117,7 @@ def init_funcworks_subject_wf(model,
                 align_volumes=align_volumes,
                 smooth_autocorrelations=smooth_autocorrelations,
                 despike=despike,
-                name=f'fsl_run_level_wf')
+                name=f'fsl_{level}_level_wf')
             workflow.add_nodes([model])
         else:
             model = fsl_higher_level_wf(
