@@ -294,20 +294,16 @@ def build_workflow(opts, retval):
     retval['plugin_settings'] = plugin_settings
 
     # Set up directories
-    log_dir = Path(output_dir) / 'funcworks' / 'logs'
     # Check and create output and working directories
     output_dir.mkdir(exist_ok=True, parents=True)
-    log_dir.mkdir(exist_ok=True, parents=True)
     work_dir.mkdir(exist_ok=True, parents=True)
 
     # Nipype config (logs and execution)
     ncfg.update_config({
         'logging': {
-            'log_directory': str(log_dir),
             'log_to_file': True
         },
         'execution': {
-            'crashdump_dir': str(log_dir),
             'crashfile_format': 'txt',
             'get_linked_libs': False,
             # 'stop_on_first_crash': opts.stop_on_first_crash,

@@ -63,9 +63,13 @@ def init_funcworks_wf(model_file,
             smooth_autocorrelations=smooth_autocorrelations,
             despike=despike,
             name=f'single_subject_{subject_id}_wf')
-        crash_dir = (Path(output_dir) / 'funcworks'
-                     / 'logs' / model['Name']
-                     / f'sub-{subject_id}' / runtime_uuid)
+        crash_dir = (
+            Path(output_dir)
+            / 'funcworks'
+            / model['Name']
+            / f'sub-{subject_id}'
+            / 'log'
+            / runtime_uuid)
         crash_dir.mkdir(exist_ok=True, parents=True)
 
         single_subject_wf.config['execution']['crashdump_dir'] = str(crash_dir)
