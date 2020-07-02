@@ -16,5 +16,5 @@ __credits__ = ['Adam Kimbler']
 __packagename__ = 'funcworks'
 
 DOWNLOAD_URL = (
-    'https://github.com/akimbler/{name}/archive/{ver}.tar.gz'.format(
+    'https://github.com/funcworks/{name}/archive/{ver}.tar.gz'.format(
         name=__packagename__, ver=__version__))
