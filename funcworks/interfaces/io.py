@@ -1,6 +1,11 @@
 """Interfaces that manipulate lists of data."""
 from nipype.interfaces.base import (
-    isdefined, DynamicTraitedSpec, traits, TraitedSpec, SimpleInterface)
+    isdefined,
+    DynamicTraitedSpec,
+    traits,
+    TraitedSpec,
+    SimpleInterface,
+)
 from nipype.interfaces.io import IOBase, add_traits
 
 
@@ -81,18 +86,17 @@ class CollateWithMetadata(SimpleInterface):
         md_map = self.inputs.field_to_metadata_map
         meta_len = len(orig_metadata)
 
-        self._results.update({'metadata': [], 'out': []})
+        self._results.update({"metadata": [], "out": []})
         for key in self._fields:
             val = getattr(self.inputs, key)
             # Allow for missing values
             if isdefined(val):
                 if len(val) != meta_len:
-                    raise ValueError(f"List lengths must match metadata. "
-                                     f"Failing list: {key}")
+                    raise ValueError(f"List lengths must match metadata. " f"Failing list: {key}")
                 for m_data, obj in zip(orig_metadata, val):
                     metadata = m_data.copy()
                     metadata.update(md_map.get(key, {}))
-                    self._results['metadata'].append(metadata)
-                    self._results['out'].append(obj)
+                    self._results["metadata"].append(metadata)
+                    self._results["out"].append(obj)
 
         return runtime

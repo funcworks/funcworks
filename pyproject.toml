@@ -1,2 +1,4 @@
 [build-system]
 requires = ["setuptools>=40.8", "wheel"]
+[tools.black]
+line-length = 99

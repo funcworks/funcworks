@@ -17,12 +17,12 @@ jobs:
           command: |
             conda create -n venv python>3.6 pylint -yq
             source activate venv
-            pip install flake8
+            pip install flake8-black
       - run:
           name: Style check
           command: |
             source activate venv
-            flake8 --max-line-length=79 --exclude=versioneer.py  --ignore=W503 /tmp/src/funcworks
+            flake8 --max-line-length=99 --exclude build/,tests/,**/__init__.py,**/versioneer.py  --ignore=E126,E402,W503,E203,BLK100 /tmp/src/funcworks
 
   build:
     docker:
